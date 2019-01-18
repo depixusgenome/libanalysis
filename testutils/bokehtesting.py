@@ -377,10 +377,7 @@ class _ManagedServerLoop:
     @property
     def savedconfig(self):
         "return the saved config"
-        from app.configuration          import ConfigurationIO
-        import taskstore
-        path = ConfigurationIO(self.ctrl).configpath(next(taskstore.iterversions('config')))
-        return taskstore.load(path)
+        raise NotImplementedError()
 
 class BokehAction:
     "All things to make gui testing easy"
