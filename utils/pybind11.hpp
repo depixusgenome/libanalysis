@@ -6,7 +6,14 @@
 #include <boost/preprocessor/seq.hpp>
 #include <boost/preprocessor/seq/cat.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
-#include <pybind11/pybind11.h>
+#if (__GNUC__ == 8 && __GNUC_MINOR__ == 2)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wcast-function-type"
+# include <pybind11/pybind11.h>
+# pragma GCC diagnostic pop
+#else
+# include <pybind11/pybind11.h>
+#endif
 #ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
 # define PYBIND11_HAS_EXP_OPTIONAL 0
