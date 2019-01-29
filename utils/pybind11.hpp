@@ -16,7 +16,11 @@
 #endif
 #ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
+#endif
+#ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_EXP_OPTIONAL 0
+#endif
+#ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_OPTIONAL 0
 #endif
 #include <pybind11/numpy.h>
