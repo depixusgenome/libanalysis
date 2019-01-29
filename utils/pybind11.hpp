@@ -17,14 +17,14 @@
 #ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
 #endif
-#ifndef PYBIND11_HAS_VARIANT
+#ifndef PYBIND11_HAS_EXP_OPTIONAL
 # define PYBIND11_HAS_EXP_OPTIONAL 0
 #endif
-#ifndef PYBIND11_HAS_VARIANT
+#ifndef PYBIND11_HAS_OPTIONAL
 # define PYBIND11_HAS_OPTIONAL 0
 #endif
-#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 #define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
 #define DPX_PY2C(CLS, ATTRS) \
