@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 "Creates a dataframe"
 
-from   typing    import Dict, Callable, Any, Iterator, Tuple, KeysView
+from   typing    import Dict, Callable, Any, Iterator, Tuple, KeysView, List
 from   functools import partial
 import re
 import shelve
@@ -121,6 +121,11 @@ class LazyShelf(dict):
         return val
 
     __delitem__ = pop
+
+    def storedkeys(self) -> List[str]:
+        "returns the value"
+        with shelve.open(self.path) as stream:
+            return list(stream.keys())
 
     def isstored(self, key) -> bool:
         "returns the value"

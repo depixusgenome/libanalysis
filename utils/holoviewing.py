@@ -204,4 +204,21 @@ def dropdown(options, fcn = None, layout = None, clear_output = True, **kwa):
     ddown.on_displayed(lambda x: _wrapped(x.value))
     return widgets.VBox([ddown, out])
 
-__all__ = ['addto', 'displayhook', 'addproperty']
+def labelsizes(elem = None, axistitles = None, ticks = None):
+    """"
+    set the label sizes on a holoviews plot
+    """
+    def _setsizes(plt, _):
+        for i in  (plt.handles["xaxis"], plt.handles["yaxis"]):
+            if axistitles is not None:
+                i.axis_label_text_font_size = axistitles
+            if ticks is not None:
+                i.major_label_text_font_size = ticks
+
+    if elem is None:
+        return _setsizes
+
+    assert isinstance(elem, hv.Element)
+    return elem.options(finalize_hooks = [elem])
+
+__all__ = ['addto', 'displayhook', 'addproperty', "labelsizes", "dropdown"]
