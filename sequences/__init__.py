@@ -63,7 +63,7 @@ PEAKS_TYPE  = Sequence[Tuple[int, bool]]                    # pylint: disable=in
 
 class Translator:
     "Translates a sequence to peaks"
-    __START  = "'", '0', 'start', 'first', 'zero', 'doublestrand', 'closed'
+    __START  = '0', 'start', 'first', 'zero', 'doublestrand', 'closed'
     __END    = '_', 'singlestrand', '$', '-1', 'last', 'end', 'open'
     __SYMBOL = '!'
     __STATE  = '-+'
@@ -75,7 +75,7 @@ class Translator:
     __TRANS.update({i.upper(): j for i, j in __TRANS.items()})
 
     __TRAFIND = re.compile('['+''.join(__TRANS)+']')
-    __ALPHABET= 'atgc'+''.join(__TRANS)+__SYMBOL+__END[0]+__START[0]+__STATE
+    __ALPHABET= 'atgc'+''.join(__TRANS)+__SYMBOL+__END[0]+__START[0]+r'\+\-'
     __SPLIT   = re.compile((r'(?:[^%(alph)s]*)([%(alph)s]+)(?:[^%(alph)s]+|$)*'
                             % dict(alph =__ALPHABET)), re.IGNORECASE)
 
@@ -109,7 +109,7 @@ class Translator:
             if oli[0] in cls.__STATE:
                 if state ^ (oli[0] == cls.__STATE[1]):
                     continue
-                oli = oli[1:]
+            oli = oli.replace(cls.__STATE[0], '').replace(cls.__STATE[1], '')
 
             if oli == cls.__START[1]:
                 if state:
