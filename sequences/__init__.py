@@ -66,6 +66,7 @@ class Translator:
     __START  = "'", '0', 'start', 'first', 'zero', 'doublestrand', 'closed'
     __END    = '_', 'singlestrand', '$', '-1', 'last', 'end', 'open'
     __SYMBOL = '!'
+    __STATE  = '-+'
     __METHS  = ((re.compile('.'+__SYMBOL), lambda x: '('+x.string[x.start()]+')'),
                 (re.compile(__SYMBOL+'.'), lambda x: '('+x.string[x.end()-1]+')'))
     __TRANS  = {'k': '[gt]', 'm': '[ac]', 'r': '[ag]', 'y': '[ct]', 's': '[cg]',
@@ -74,7 +75,7 @@ class Translator:
     __TRANS.update({i.upper(): j for i, j in __TRANS.items()})
 
     __TRAFIND = re.compile('['+''.join(__TRANS)+']')
-    __ALPHABET= 'atgc'+''.join(__TRANS)+__SYMBOL+__END[0]+__START[0]
+    __ALPHABET= 'atgc'+''.join(__TRANS)+__SYMBOL+__END[0]+__START[0]+__STATE
     __SPLIT   = re.compile((r'(?:[^%(alph)s]*)([%(alph)s]+)(?:[^%(alph)s]+|$)*'
                             % dict(alph =__ALPHABET)), re.IGNORECASE)
 
@@ -102,6 +103,14 @@ class Translator:
     @classmethod
     def __get(cls, state, seq, oligs, flags):
         for oli in oligs:
+            if len(oli) == 0:
+                continue
+
+            if oli[0] in cls.__STATE:
+                if state ^ (oli[0] == cls.__STATE[1]):
+                    continue
+                oli = oli[1:]
+
             if oli == cls.__START[1]:
                 if state:
                     yield (0, state)
