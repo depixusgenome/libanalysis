@@ -5,25 +5,14 @@ from   copy    import copy, deepcopy
 from   pathlib import Path
 import logging
 import sys
-import glob
 import subprocess
 import random
 import inspect
 import warnings
 
 import numpy as np
-
 import click
 
-def _add_sys_paths():
-    paths = (str(Path(__file__).parent.parent.resolve()),)+tuple(glob.glob("*.pyz"))
-    for path in paths:
-        if path not in sys.path:
-            sys.path.append(path)
-_add_sys_paths()
-
-
-# pylint: disable=wrong-import-position
 import utils.warningsconfig   #  pylint: disable=unused-import
 from utils.logconfig    import getLogger
 from bokeh.resources    import DEFAULT_SERVER_PORT # pylint: disable=wrong-import-order
