@@ -65,12 +65,10 @@ class TabsTheme:
 TThemeType = TypeVar("TThemeType", bound = TabsTheme)
 class TabsView(Generic[TThemeType], BokehView):
     "A view with all plots"
-    KEYS          : ClassVar[Dict[type, str]]
-    TASKS_CLASSES : ClassVar[Tuple[type]]
-    NAME          : ClassVar[str]
-    TASKS         : ClassVar[Tuple[type]]
-    _tabs         : Tabs
-    __theme       : TabsTheme
+    KEYS    : ClassVar[Dict[type, str]]
+    NAME    : ClassVar[str]
+    _tabs   : Tabs
+    __theme : TabsTheme
     def __init__(self, ctrl = None, **kwa):
         "Sets up the controller"
         super().__init__(ctrl = ctrl, **kwa)
@@ -108,9 +106,6 @@ class TabsView(Generic[TThemeType], BokehView):
 
     def ismain(self, ctrl):
         "Allows setting-up stuff only when the view is the main one"
-        for i in self.TASKS_CLASSES:
-            self.__select(i).ismain(ctrl)
-        ctrl.theme.updatedefaults("tasks.io", tasks = self.TASKS)
         if "advanced" in ctrl.display.model("keystroke", True):
             def _advanced():
                 for panel in self._panels:
@@ -139,6 +134,10 @@ class TabsView(Generic[TThemeType], BokehView):
                     name   = self.NAME,
                     width  = self.__theme.width,
                     height = self.__theme.height)
+
+    @staticmethod
+    def _addtodoc_oneshot() -> Tuple[str, str]:
+        return "display", "applicationstarted"
 
     def addtodoc(self, ctrl, doc):
         "returns object root"
@@ -175,10 +174,8 @@ class TabsView(Generic[TThemeType], BokehView):
             itm = next(i for i, j in enumerate(self._panels) if j.plotter.isactive())
             doc.add_root(_root(itm))
 
-        if hasattr(ctrl, 'tasks'):
-            ctrl.tasks.oneshot("opentrack", _fcn)
-        else:
-            ctrl.display.oneshot("applicationstarted", _fcn)
+        one, name = self._addtodoc_oneshot()
+        getattr(ctrl, one).oneshot(name, _fcn)
 
         mode = self.defaultsizingmode()
         return layouts.row(layouts.widgetbox(tabs, **mode), **mode)
@@ -206,15 +203,10 @@ class TabsView(Generic[TThemeType], BokehView):
             ctrl.writeuserconfig()
             dialog(self._doc, body = msg, buttons = "ok")
 
-def initsubclass(name, keys, tasksclasses = ()):
+def initsubclass(name, keys, *_1, **_2):
     "init TabsView subclass"
-    def _fcn(lst):
-        return tuple(j for i, j in enumerate(lst) if j not in lst[:i])
     def _wrapper(cls):
-        cls.KEYS          = OrderedDict(keys)
-        cls.TASKS_CLASSES = tuple(tasksclasses)
-        cls.NAME          = name
-
-        cls.TASKS         = _fcn(sum((list(i.TASKS) for i in cls.TASKS_CLASSES), []))
+        cls.KEYS = OrderedDict(keys)
+        cls.NAME = name
         return cls
     return _wrapper
