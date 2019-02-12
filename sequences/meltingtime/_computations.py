@@ -370,8 +370,8 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
     """
     def __init__(self, **_):
         self.force        : float             = 8.5
-        self.rate         : float             = (4/1.4)*1e-6
-        self.fork_tau_mul : float             = 1.
+        self.rate         : float             = 1.e-6
+        self.fork_tau_mul : float             = 2.8
         self.table        : NNDATA            = {}
         self.settables()
 
@@ -512,14 +512,14 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
 
     def __trep(self, comp, mat, inds):
         #initial state: nn open bases for the hairpin 0 open bases for the oligo
-        ini                                                    = np.zeros(mat.shape[0])
-        ini[inds[(0,)*(len(mat.shape)-1)+(len(comp.oseq)-1,)]] = 1
+        ini                                                     = np.zeros(mat.shape[0])
+        ini[inds[(0,)*(len(inds.shape)-1)+(len(comp.oseq)-1,)]] = 1
 
         #holding state: all possible configurations
-        hold                                                   = np.ones(mat.shape[0])
+        hold                                                    = np.ones_like(ini)
 
         # between the initil and final state
-        trep =-self.rate*(hold @ (np.matrix(mat).I @ ini))[0,0]
+        trep =-self.rate*((np.matrix(mat).I @ ini) @ hold)[0,0]
         if not self.loop:
             trep *= self.fork_tau_mul
         return trep
@@ -568,7 +568,8 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         return nbases, ind
 
     @staticmethod
-    def __iter5prime(nbases, inds):
+    def __iter5prime(inds):
+        nbases = inds.shape[0]
         if len(inds.shape) == 2:
             yield from (
                 (inds[i,j], inds[i+1,j], i, j-i > 2)
@@ -577,11 +578,12 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
 
         yield from (
             (inds[i,j,k], inds[i+1,j, k], i, k-i > 2)
-            for j in range (0,nbases-1) for i in range(j,nbases-2) for k in range (i+2,nbases)
+            for j in range(nbases-1) for i in range(j,nbases-2) for k in range (i+2,nbases)
         )
 
     @staticmethod
-    def __iter3prime(nbases, inds):
+    def __iter3prime(inds):
+        nbases = inds.shape[0]
         if len(inds.shape) == 2:
             yield from (
                 (inds[i,j], inds[i,j-1], j-1, j-i > 2)
@@ -589,7 +591,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
             )
         yield from (
             (inds[i,j,k], inds[i,j,k-1], k-1, k-i > 2)
-            for i in range(nbases) for j in range(i+1, nbases) for k in range(i+2, nbases)
+            for i in range(nbases) for j in range(i+1) for k in range(i+2, nbases)
         )
 
     @staticmethod
@@ -625,13 +627,14 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         mat  = np.zeros((inds.max()+1,)*2, dtype = 'f8')
         rco  = self.elasticity.rco(self.force, self.temperatures)
         for in0, in1, j, dist in chain(
-                self.__iter5prime(nbases, inds),
-                self.__iter3prime(nbases, inds)
+                self.__iter5prime(inds),
+                self.__iter3prime(inds)
         ):
             mat[in0, in1] += rco # closing
             mat[in1, in1] += -rco # closing
             mat[in1, in0] +=  (roo if dist else roo2)[j] # opening
             mat[in0, in0] += -(roo if dist else roo2)[j] # opening
+
 
         #escaping terms
         for in0, i in self.__iterescaping(nbases, inds):
