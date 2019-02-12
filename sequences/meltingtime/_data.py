@@ -25,13 +25,10 @@ RNA_DNA_NN1 = {
 # discrimination of locked nucleic acid-DNA duplexes. Biochemistry,
 # 50:9352-9367.
 LNA_DNA_NN5 = {
-    'init': (0, 0),
-    'init_A/T': (2.3, 4.1),
-    'init_G/C': (0.1, -2.8),
-    'init_oneG/C': (0, 0),
-    'init_allA/T': (0, 0),
-    'init_5T/A': (0, 0),
+    'init': (0, 0), 'init_A/T': (2.3, 4.1), 'init_G/C': (0.1, -2.8),
+    'init_oneG/C': (0, 0), 'init_allA/T': (0, 0), 'init_5T/A': (0, 0),
     'sym': (0, -1.4),
+
     'AA/TT':(-9.991,-27.175),
     'AC/TG':(-11.389,-28.963),
     'AG/TC':(-12.793,-31.607),
@@ -547,7 +544,7 @@ def nndata(name, *others) -> NNDATA:
 
     out: NNDATA = {}
     for key in others[::-1]+(name,):
-        out.update(get(key))
+        out.update(get(key) if isinstance(key, str) else nndata(*key))
     return out
 
 R  = 1.9872  # universal gas constant in Cal/degrees C*Mol
