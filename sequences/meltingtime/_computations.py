@@ -269,13 +269,13 @@ class KeyComputer:
 
     def key(self, ind:int) -> str:
         "get table keys"
-        return self.seq[ind:ind+2] + '/' + self.oligo[ind:ind+2]
+        return self.oligo[ind:ind+2] + '/' + self.seq[ind:ind+2]
 
     def terminalkey(self, ind) -> str:
         "get table keys for terminal endings"
         if ind == -1:
-            return "n"+self.oligo[-1:-3:-1] + '/n' + self.seq[-1:-3:-1]
-        return self.seq[:2] + 'n/' + self.oligo[:2] + "n"
+            return self.oligo[-2:] + './' + self.seq[-2:]        + '.'
+        return self.seq[:2][::-1]  + './' + self.oligo[:2][::-1] + '.'
 
     def pop(self, ind):
         "shorten the current sequences"
@@ -393,9 +393,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         sets the table for non-missmatches (1), internal missmatches (2) and
         dangling ends (3)
         """
-        self.table    = nndata(nomiss, internalmiss, dangling)
-        self.table.update({i.replace("/", "n/")+"n": j  for i, j in nndata(terminal).items()})
-        self.table.update({i[::-1]: j for i, j in self.table.items()})
+        self.table = nndata(nomiss, internalmiss, dangling, terminal)
         return self
 
     def setmode(self, mode:str):
@@ -452,8 +450,9 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         comp.dg[-1] += dgt0*(comp.oseq[-1] in 'AaTt')
 
         # Finally, the 'zipping'
-        self.__zipping((comp.seq,  comp.oligo),  comp.dg[off_bp:], comp.delta)
-        self.__zipping((comp.oseq, comp.ooligo), comp.dgh, None)
+        self.__zipping((comp.seq,  comp.oligo), comp.dg[off_bp:], comp.delta)
+        if not self.loop:
+            self.__zipping((comp.oseq, complement(comp.oseq)),  comp.dgh, None)
 
         # We compute salt correction for the hybridized oligo that is with
         # reduced charge near dsDNA
@@ -477,8 +476,8 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
 
     def __call__( # pylint: disable=too-many-arguments
             self,
-            sequence : str,
-            oligo    : str,
+            sequence : str, # 3'-> 5'
+            oligo    : str, # 5'-> 3'
             shift    : int = 0,
             rhoseq   : int = 25,
             rhooligo : int = 25

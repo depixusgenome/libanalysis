@@ -315,6 +315,14 @@ LNA_DNA_TMM1 = {
     'ct/GG': (-6.6, -18.7), 'gg/CT': (-5.7, -15.9), 'gt/CG': (-15.05, -40.65),
     'tg/AT': (-3.9, -10.5), 'tt/AG': (-3.6, -9.8)
 }
+# replace all keys by "XY./ZW." and add their opposite ".WZ/.YX":
+def _update_lna_dna_tmm1():
+    return {
+        i.replace('/', './')+'.': np.array(j, dtype = 'f8')
+        for i, j in LNA_DNA_TMM1.items()
+    }
+LNA_DNA_TMM1 = _update_lna_dna_tmm1()
+del _update_lna_dna_tmm1
 
 # Thermodynamic lookup tables (dictionaries):
 # Enthalpy (dH) and entropy (dS) values for nearest neighbors and initiation
@@ -483,6 +491,12 @@ DNA_TMM1 = {
     'CT/GG': (-6.6, -18.7), 'GG/CT': (-5.7, -15.9), 'GT/CG': (-5.9, -16.1),
     'TG/AT': (-3.9, -10.5), 'TT/AG': (-3.6, -9.8)}
 
+# replace all keys by ".XY/.ZW" and add their opposite "WZ./YX.":
+def _update_dna_tmm1():
+    return {i.replace('/', './')+'.': j for i, j in DNA_TMM1.items()}
+DNA_TMM1 = _update_dna_tmm1()
+del _update_dna_tmm1
+
 # Dangling ends table (DNA)
 # Bommarito et al. (2000), Nucl Acids Res 28: 1929-1934
 DNA_DE1 = {
@@ -527,20 +541,20 @@ RNA_DE1 = {
     'AG/.T': (1.6, 6.1), 'CG/.T': (2.2, 8.1), 'GG/.T': (0.7, 3.5),
     'TG/.T': (3.1, 10.6)}
 
-_CNV = lambda x: {i: np.array(j, dtype = 'f8') for i, j in x.items()}
-def _create_data(locs) -> Dict[str, NNDATA]:
-    data: Dict[str, NNDATA] = {}
-    for i, j in list(locs.items()):
-        if any(i.startswith(j+"_") for j in ("DNA", "RNA", "LNA", "R_DNA")):
-            data[i] = locs[i] = _CNV(j)
-    return data
+def _cnv(info):
+    info.update({k: np.array(l, dtype = 'f8') for k, l in info.items()})
+    info.update({k[::-1]: l for k, l in info.items() if '_' not in k})
+    return info
 
+def _create_data(locs) -> Dict[str, NNDATA]:
+    keys = "DNA", "RNA", "LNA", "R_DNA"
+    return {i: _cnv(locs[i]) for i in locs if any(i.startswith(j+"_") for j in keys)}
 DATA = _create_data(locals())
 del _create_data
 
 def nndata(name, *others) -> NNDATA:
     "return the data associated to a name"
-    get = lambda key: DATA[key] if isinstance(key, str) else _CNV(dict(key))
+    get = lambda key: DATA[key] if isinstance(key, str) else _cnv(dict(key))
 
     out: NNDATA = {}
     for key in others[::-1]+(name,):
