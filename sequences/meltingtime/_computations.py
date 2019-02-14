@@ -269,6 +269,8 @@ class KeyComputer:
 
     def key(self, ind:int) -> str:
         "get table keys"
+        if ind == -1:
+            return self.seq[-2:][::-1]  + '/' + self.oligo[-2:][::-1]
         return self.oligo[ind:ind+2] + '/' + self.seq[ind:ind+2]
 
     def terminalkey(self, ind) -> str:
@@ -412,14 +414,14 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
             self.loop            = True
         return self
 
-    def states(
+    def energies(
             self,
             comp,
             shift    : int = 0,
             rhoseq   : int = 25,
             rhooligo : int = 25
     ):
-        "return the states matrix"
+        "computes the δ enthalpies & entropies"
         self.__shift(shift, comp) # compute resized sequences, withouth overdangling ends
         comp.resetdg()            # make sure dg & dgh have updated sizes
 
@@ -460,6 +462,13 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         comp.dg  += self.cor*saltinfo[0]
         comp.dgh += self.cor*saltinfo[0]
 
+    def states(
+            self,
+            comp,
+            rhoseq   : int = 25,
+            rhooligo : int = 25
+    ):
+        "return the states matrix"
         # roo[0] opening of the first 5' base of the oligo towards the fork
         # l is an index over all possible configurations
         #ind[i, j]  is the index of the configuration :
@@ -469,6 +478,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
         nbases, inds = self.__state_indexes(comp)
         mat          = self.__transitions(nbases, inds, comp)
         if self.loop:
+            saltinfo  = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)
             self.__encircling(saltinfo[1], inds, mat)
         else:
             self.__fork(comp, inds, mat)
@@ -483,8 +493,8 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
             rhooligo : int = 25
     ):
         comp        = ComputationDetails(sequence, oligo)
-
-        trep = self.__trep(comp, *self.states(comp, shift, rhoseq, rhooligo))
+        self.energies(comp, shift, rhoseq, rhooligo)
+        trep = self.__trep(comp, *self.states(comp, rhoseq, rhooligo))
 
         temp, delta = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)[2:]
         dgf         = self.cor*delta+((len(comp.oseq)-1)*(self.gss-self.gds))
@@ -532,8 +542,8 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
             # Align both sequences using the shift parameter
             bigger      = len(comp.seq) > len(comp.oligo)
             smaller     = len(comp.seq) < len(comp.oligo)
-            comp.seq    = '.' * (shift > 0 or smaller) + comp.seq[max(-shift-1,  0):]
-            comp.oligo  = '.' * (shift < 0 or bigger)  + comp.oligo[max(shift-1, 0):]
+            comp.seq    = '.' * (shift < 0 or smaller) + comp.seq[max(shift-1,  0):]
+            comp.oligo  = '.' * (shift > 0 or bigger)  + comp.oligo[max(-shift-1, 0):]
 
             bigger      = len(comp.seq) > len(comp.oligo)
             smaller     = len(comp.seq) < len(comp.oligo)
@@ -574,6 +584,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
                 (inds[i,j], inds[i+1,j], i, j-i > 2)
                 for j in range(2,nbases) for i in range(j-1)
             )
+            return
 
         yield from (
             (inds[i,j,k], inds[i+1,j, k], i, k-i > 2)
@@ -588,6 +599,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
                 (inds[i,j], inds[i,j-1], j-1, j-i > 2)
                 for i in range(nbases) for j in range(i+2, nbases)
             )
+            return
         yield from (
             (inds[i,j,k], inds[i,j,k-1], k-1, k-i > 2)
             for i in range(nbases) for j in range(i+1) for k in range(i+2, nbases)
@@ -597,6 +609,7 @@ class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
     def __iterescaping(nbases, inds):
         if len(inds.shape) == 2:
             yield from ((inds[i,i+1], i) for i in range(nbases-1))
+            return
 
         yield from ((inds[i,j,i+1], i) for i in range (nbases-1) for j in range(i+1))
 
