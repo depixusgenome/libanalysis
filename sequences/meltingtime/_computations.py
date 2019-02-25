@@ -2,698 +2,319 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=invalid-name
 "Computing melting times"
-from itertools  import chain
-from typing     import Iterator, Callable, Tuple, cast
-import numpy as np
-try:
-    from sequences.translator import complement, gccontent
-except ImportError:
-    # stay BioPython compatible
-    from Bio.SeqUtils import GC as gccontent # type: ignore
-    from Bio.Seq      import Seq
-    def complement(seq:str) -> str:
-        "return the complement"
-        return str(Seq(seq).complement())
+from itertools  import chain, product
+from typing     import Iterator, Tuple, Optional, cast
+import numpy  as np
+from   numpy.lib.recfunctions import join_by
+from   ._base import BaseComputations, complement, gccontent
 
-from   ._data       import nndata, R, T0, NNDATA
+class Strands:
+    "all about strands"
+    def __init__(self, seq:Optional[str], opposite:Optional[str] = None, shift: int = 0):
+        if opposite is None:
+            opposite = complement(cast(str, seq))
+        elif seq is None:
+            seq      = complement(cast(str, opposite))
+        assert isinstance(seq,      str)
+        assert isinstance(opposite, str)
 
-class Salt: # pylint: disable=too-many-instance-attributes
-    "salt"
-    def __init__(self, **_):
-        self.method          = 5
-        self.encercling      = False
-        self.encirclingcoeff = 0.34
-        self.encirclingbp    = 2
-        self.dsCharge = 0.4
-        self.rhoNa    = 150
-        self.rhoK     = 0
-        self.rhoTris  = 30
-        self.rhoMg    = 0
-        self.rhodNTPs = 0
-        for i in set(self.__dict__) & set(_):
-            setattr(self, i, _[i])
+        seq      = '.' * max(0, -shift) + seq
+        opposite = '.' * max(0, shift)  + opposite
 
-    def encirclingrate(self, cnf,  cordsbp)-> float:
-        "return encircling rate"
-        if self.encercling:
-            tmpdg = -2*cnf.gss -cnf.gds
-            # must depend on salt corr
-            tmpdg += self.encirclingbp * cordsbp * cnf.temperatures.mtG
-            return self.encirclingcoeff*np.exp(tmpdg)  # was 0.1
-        return 0.
+        self.seq      = seq    + '.' * max(0, len(opposite) - len(seq))
+        self.opposite = opposite  + '.' * max(0, len(seq)   - len(opposite))
+        self.shift    = shift
+
+        dsfcn   = lambda x, y: next(i for i, j in enumerate(zip(x, y)) if '.' not in j)
+        self.dsbegin = dsfcn(self.seq, self.opposite)
+        self.dsend   = len(self.seq)-dsfcn(self.seq[::-1], self.opposite[::-1])
 
     @property
-    def method(self):
-        "salt correction config"
-        return self.__dict__['method']
+    def dsseq(self):
+        "return the double stranded part of the sequence"
+        return self.seq[self.dsbegin:self.dsend]
 
-    @method.setter
-    def method(self, val):
-        "salt correction config"
-        self.__dict__['method'] = val
-        if val == 6:
-            self.dsCharge        = 0.5
-            self.encirclingbp    = 2
-            self.encirclingcoeff = 0.27
-        elif val == 5:
-            self.dsCharge        = 0.4
-            self.encirclingbp    = 2
-            self.encirclingcoeff = 0.3
+    @property
+    def dsopposite(self):
+        "return the double stranded part of the opposite sequence"
+        return self.opposite[self.dsbegin:self.dsend]
 
-    def compute(self, rhoseq, rhooligo, mtg, comp) -> Tuple[float, float, float, float]:
-        "compute salt corrections"
-        rlogk            = R*np.log((rhoseq - (rhooligo / 2.0)) * 1e-9)
-        delta_h, delta_s = comp.delta*[1e3, 1]
-        corrh            = self.salt_correction(
-            Na     = self.rhoNa,
-            K      = self.rhoK,
-            Tris   = self.rhoTris,
-            Mg     = self.rhoMg,
-            dNTPs  = self.rhodNTPs,
-            method = self.method,
-            seq    = comp.oseq
-        )
-        corr  =  self.dsCharge * corrh
+    @property
+    def doublestrand(self):
+        "return the double stranded part"
+        return self.dsseq, self.dsopposite
 
-        # we compute salt correction for normal oligo to compute Kd and encercling energy
-        if self.method in range(1,4):
-            meltingtemp  = delta_h / (delta_s + rlogk) - T0 + corr
-            delta_sc     = delta_h / (meltingtemp + T0) - rlogk
-            cords        = self.dsCharge * (delta_sc - delta_s)
-        elif self.method == 5:
-            cords       = corr
-            meltingtemp = delta_h / (delta_s + corrh + rlogk) - T0
-            delta_sc    = delta_s + corrh
-        else:
-            meltingtemp = delta_h / (delta_s + rlogk) - T0
-            meltingtemp = 1 / (1 / (meltingtemp + T0) + corrh) - T0
-            delta_sc    = delta_h / (meltingtemp + T0) - rlogk
-            cords       = self.dsCharge * (delta_sc - delta_s)
-
-            meltingtemp = delta_h / (delta_s + rlogk) - T0
-            meltingtemp = 1 / (1 / (meltingtemp + T0) + corr) - T0
-            delta_sc    = delta_h / (meltingtemp + T0) - rlogk
-
-        # energy between the oligo and template (can be LNA/DNA)
-        return (
-            (cords/(len(comp.oseq)-1))* mtg,
-            (delta_sc - delta_s)/(len(comp.oseq)-1),
-            meltingtemp,
-            delta_h*1e-3 - (delta_sc) *mtg
-        )
-
-    # Extracted as is from Bio.SeqUtils.MeltingTemp
-    # pylint: disable=invalid-name,too-many-arguments,too-many-locals,unneeded-not
-    # pylint: disable=no-else-return,too-many-branches,bad-continuation
-    @staticmethod
-    def salt_correction(Na=0, K=0, Tris=0, Mg=0, dNTPs=0, method=1, seq=None):
-        """
-        Calculate a term to correct Tm for salt ions.
-
-        Depending on the Tm calculation, the term will correct Tm or entropy. To
-        calculate corrected Tm values, different operations need to be applied:
-
-         - methods 1-4: Tm(new) = Tm(old) + corr
-         - method 5: deltaS(new) = deltaS(old) + corr
-         - methods 6+7: Tm(new) = 1/(1/Tm(old) + corr)
-
-        Parameters:
-         - Na, K, Tris, Mg, dNTPS: Millimolar concentration of respective ion. To
-           have a simple 'salt correction', just pass Na. If any of K, Tris, Mg and
-           dNTPS is non-zero, a 'sodium-equivalent' concentration is calculated
-           according to von Ahsen et al. (2001, Clin Chem 47: 1956-1961):
-           [Na_eq] = [Na+] + [K+] + [Tris]/2 + 120*([Mg2+] - [dNTPs])^0.5
-           If [dNTPs] >= [Mg2+]: [Na_eq] = [Na+] + [K+] + [Tris]/2
-         - method: Which method to be applied. Methods 1-4 correct Tm, method 5
-           corrects deltaS, methods 6 and 7 correct 1/Tm. The methods are:
-
-           1. 16.6 x log[Na+]
-              (Schildkraut & Lifson (1965), Biopolymers 3: 195-208)
-           2. 16.6 x log([Na+]/(1.0 + 0.7*[Na+]))
-              (Wetmur (1991), Crit Rev Biochem Mol Biol 126: 227-259)
-           3. 12.5 x log(Na+]
-              (SantaLucia et al. (1996), Biochemistry 35: 3555-3562
-           4. 11.7 x log[Na+]
-              (SantaLucia (1998), Proc Natl Acad Sci USA 95: 1460-1465
-           5. Correction for deltaS: 0.368 x (N-1) x ln[Na+]
-              (SantaLucia (1998), Proc Natl Acad Sci USA 95: 1460-1465)
-           6. (4.29(%GC)-3.95)x1e-5 x ln[Na+] + 9.40e-6 x ln[Na+]^2
-              (Owczarzy et al. (2004), Biochemistry 43: 3537-3554)
-           7. Complex formula with decision tree and 7 empirical constants.
-              Mg2+ is corrected for dNTPs binding (if present)
-              (Owczarzy et al. (2008), Biochemistry 47: 5336-5353)
-
-        Examples
-        --------
-        >>> from Bio.SeqUtils import MeltingTemp as mt
-        >>> print('%0.2f' % mt.salt_correction(Na=50, method=1))
-        -21.60
-        >>> print('%0.2f' % mt.salt_correction(Na=50, method=2))
-        -21.85
-        >>> print('%0.2f' % mt.salt_correction(Na=100, Tris=20, method=2))
-        -16.45
-        >>> print('%0.2f' % mt.salt_correction(Na=100, Tris=20, Mg=1.5, method=2))
-        -10.99
-
-        """
-        # Extracted as is from Bio.SeqUtils.MeltingTemp
-        if method in (5, 6, 7) and not seq:
-            raise ValueError('sequence is missing (is needed to calculate ' +
-                             'GC content or sequence length).')
-        if seq:
-            seq = str(seq)
-        corr = 0
-        if not method:
-            return corr
-        Mon = Na + K + Tris / 2.0  # Note: all these values are millimolar
-        mg = Mg * 1e-3             # Lowercase ions (mg, mon, dntps) are molar
-        # Na equivalent according to von Ahsen et al. (2001):
-        if sum((K, Mg, Tris, dNTPs)) > 0 and not method == 7 and dNTPs < Mg:
-            # dNTPs bind Mg2+ strongly. If [dNTPs] is larger or equal than
-            # [Mg2+], free Mg2+ is considered not to be relevant.
-            Mon += 120 * np.sqrt(Mg - dNTPs)
-        mon = Mon * 1e-3
-        # Note: np.log = ln(), np.log10 = log()
-        if method in range(1, 7) and not mon:
-            raise ValueError('Total ion concentration of zero is not allowed in ' +
-                             'this method.')
-        if method == 1:
-            corr = 16.6 * np.log10(mon)
-        if method == 2:
-            corr = 16.6 * np.log10((mon) / (1.0 + 0.7 * (mon)))
-        if method == 3:
-            corr = 12.5 * np.log10(mon)
-        if method == 4:
-            corr = 11.7 * np.log10(mon)
-        if method == 5:
-            corr = 0.368 * (len(seq) - 1) * np.log(mon)
-        if method == 6:
-            corr = (4.29 * gccontent(seq) / 100 - 3.95) * 1e-5 * np.log(mon) +\
-                9.40e-6 * np.log(mon) ** 2
-        if method == 7:
-            a, b, c, d = 3.92, -0.911, 6.26, 1.42
-            e, f, g = -48.2, 52.5, 8.31
-            if dNTPs > 0:
-                dntps = dNTPs * 1e-3
-                ka = 3e4  # Dissociation constant for Mg:dNTP
-                # Free Mg2+ calculation:
-                mg = (-(ka * dntps - ka * mg + 1.0) +
-                      np.sqrt((ka * dntps - ka * mg + 1.0) ** 2 +
-                                4.0 * ka * mg)) / (2.0 * ka)
-            if Mon > 0:
-                r = np.sqrt(mg) / mon
-                if r < 0.22:
-                    corr = (4.29 * gccontent(seq) / 100 - 3.95) * \
-                        1e-5 * np.log(mon) + 9.40e-6 * np.log(mon) ** 2
-                    return corr
-                elif r < 6.0:
-                    a = 3.92 * (0.843 - 0.352 * np.sqrt(mon) * np.log(mon))
-                    d = 1.42 * (1.279 - 4.03e-3 * np.log(mon) -
-                                8.03e-3 * np.log(mon) ** 2)
-                    g = 8.31 * (0.486 - 0.258 * np.log(mon) +
-                                5.25e-3 * np.log(mon) ** 3)
-            corr = (a + b * np.log(mg) + (gccontent(seq) / 100) *
-                    (c + d * np.log(mg)) + (1 / (2.0 * (len(seq) - 1))) *
-                    (e + f * np.log(mg) + g * np.log(mg) ** 2)) * 1e-5
-        if method > 7:
-            raise ValueError('Allowed values for parameter \'method\' are 1-7.')
-        return corr
-
-class Temperatures:
-    "temperatures"
-    def __init__(self, **_):
-        self.dG = 25
-        for i in set(self.__dict__) & set(_):
-            setattr(self, i, _[i])
-    tG  = cast(float, property(lambda self: self.dG+T0))
-    mtG = cast(float, property(lambda self: (self.dG+T0)*1e-3))
-    ft  = cast(float, property(lambda self: 4.1*self.tG/(T0+25)))
-
-class SingleStrandModel:
-    "elastic model coefficients for single-strand dna"
-    def __init__(self, **_):
-        self.bpss = 2.14
-        self.dss  = 0.542
-        self.sss  = 216
-        for i in set(self.__dict__) & set(_):
-            setattr(self, i, _[i])
-
-    @staticmethod
-    def gds(force, temperatures):
-        """ elasticity models for the closing rates for the ds DNA"""
-        ft  = temperatures.ft
-        return (force/ft - np.sqrt(force/ft/50) + 0.5*force**2./ft/1230)*0.34
-
-    def gss(self, force, temperatures):
-        """ elasticity models for the closing rates for the ss DNA"""
-        ft = temperatures.ft
-        u  = self.bpss*force/ft
-        return (
-            0 if u == 0 else
-            self.dss/self.bpss*(np.log(np.sinh(u)/u) + 0.5*force**2./ft/self.sss)
-        )
-
-    def rco(self, force, temperatures):
-        """closing rates:only depend on the force"""
-        return np.exp(-self.gss(force, temperatures)+self.gds(force, temperatures))
-
-    def rch(self, force, temperatures):
-        """closing rates:only depend on the force"""
-        return np.exp(-2*self.gss(force, temperatures))
-
-class KeyComputer:
-    "computes keys for various energy tables"
-    def __init__(self, seq, oligo):
-        self.seq   = str(seq)
-        self.oligo = str(oligo if oligo else complement(seq))
+    def dskey(self, ind:int) -> str:
+        "get table keys"
+        if ind == -1:
+            return self.dsseq[-2:][::-1]  + '/' + self.dsopposite[-2:][::-1]
+        return self.dsopposite[ind:ind+2] + '/' + self.dsseq[ind:ind+2]
 
     def key(self, ind:int) -> str:
         "get table keys"
-        if ind == -1:
-            return self.seq[-2:][::-1]  + '/' + self.oligo[-2:][::-1]
-        return self.oligo[ind:ind+2] + '/' + self.seq[ind:ind+2]
+        return self.opposite[ind:ind+2] + '/' + self.seq[ind:ind+2]
 
-    def terminalkey(self, ind) -> str:
-        "get table keys for terminal endings"
-        if ind == -1:
-            return self.oligo[-2:] + './' + self.seq[-2:]        + '.'
-        return self.seq[:2][::-1]  + './' + self.oligo[:2][::-1] + '.'
+    def terminalbases(self) -> Iterator[Tuple[int, str]]:
+        "return keys for terminal bases"
+        yield (
+            self.dsend-1,
+            self.opposite[self.dsend-1:self.dsend+1]
+            + './'
+            + self.seq[self.dsend-1:self.dsend+1]
+            + '.'
+        )
+        yield (
+            self.dsbegin-1,
+            self.seq[self.dsbegin-1:self.dsbegin+1][::-1]
+            + './'
+            + self.opposite[self.dsbegin-1:self.dsbegin+1][::-1]
+            + '.'
+        )
 
-    def pop(self, ind):
-        "shorten the current sequences"
-        if ind == 0:
-            self.seq   = self.seq[1:]
-            self.oligo = self.oligo[1:]
-        elif ind == -1:
-            self.seq   = self.seq[:-1]
-            self.oligo = self.oligo[:-1]
+    def danglingends(self) -> Iterator[Tuple[int, str]]:
+        "return keys for terminal bases"
+        for side in (False, True):
+            ind = self.dsend-1 if side else max(self.dsbegin-1, 0)
+            if any(i[ind] == "." for i in (self.seq, self.opposite)):
+                if side:
+                    yield (
+                        ind-1,
+                        self.seq[ind-1:ind+1][::-1] + '/' + self.opposite[ind-1:ind+1][::-1]
+                    )
+                else:
+                    yield (
+                        ind,
+                        self.opposite[ind:ind+2] + '/' + self.seq[ind:ind+2]
+                    )
 
-class ComputationDetails(KeyComputer): # pylint: disable=too-many-instance-attributes
-    "All info for computing the melting times & other stats"
-    dg:  np.ndarray
-    dgh: np.ndarray
-    def __init__(self, seq, oligo):
-        super().__init__(seq, oligo)
-        self.oseq   = self.seq
-        self.ooligo = self.oligo
-        self.delta  = np.zeros(2, dtype = 'f8')
+    def dsbases(self) -> Iterator[Tuple[int, str]]:
+        "return keys for the double stranded part of the dna"
+        yield from ((i, self.key(i)) for i in range(self.dsbegin, self.dsend-1))
 
-    def resetdg(self):
-        "sets dg & dgh"
-        self.dg    = np.zeros(len(self.oseq)-1, dtype = 'f8')
-        self.dgh   = np.zeros(len(self.oseq)-1, dtype = 'f8')
+    @property
+    def isoligo(self):
+        "return whether the opposite sequence is shortker than the other"
+        return self.seq[0] == '.' and self.seq[-1] == '.'
 
-class StateMatrixComputer: # pylint: disable=too-many-instance-attributes
-    """
-    Return the Tm using nearest neighbor thermodynamics.
+    @property
+    def iscoligo(self):
+        "return whether the opposite sequence is shorter than the other"
+        return self.opposite[0] == '.' and self.opposite[-1] == '.'
 
-    Arguments:
-     - sequence: The primer/probe sequence as string or Biopython sequence object.
-       For RNA/DNA hybridizations sequence must be the RNA sequence.
-     - oligo: Complementary sequence. The sequence of the template/target in
-       3'->5' direction. oligo is necessary for mismatch correction and
-       dangling-ends correction. Both corrections will automatically be
-       applied if mismatches or dangling ends are present. Default=None. It is also
-       needed to define the existance of DNA(lower cap) LNA (upper cap) or RNA (???).
-     - shift: Shift of the primer/probe sequence on the template/target
-       sequence, e.g.::
+    @property
+    def reversecomplement(self) -> 'Strands':
+        "return the reverse complement of the strands"
+        cpy = type(self)("", "")
+        cpy.seq      = complement(self.opposite)[::-1]
+        cpy.opposite = complement(self.seq)[::-1]
+        cpy.shift    = (self.dsend - len(self.seq)) * (1 if self.shift > 0 else -1)
+        cpy.dsbegin  = len(self.seq)-self.dsend
+        cpy.dsend    = len(self.seq)-self.dsbegin
+        return cpy
 
-                           shift=0       shift=1        shift= -1
-        Primer (sequence): 5' ATGC...    5'  ATGC...    5' ATGC...
-        Template (oligo):  3' TACG...    3' CTACG...    3'  ACG...
-
-       The shift parameter is necessary to align sequence and oligo if they have
-       different lengths or if they should have dangling ends. Default=0
-     - terminal: Thermodynamic values for terminal mismatches.
-       Default: DNA_TMM1 (SantaLucia & Peyret, 2001)
-     - table: Thermodynamic NN (1), missmatch (2) and dangling ends(3):
-        1. Thermodynamic NN values, eight tables are implemented:
-            * For DNA/DNA hybridizations:
-
-                - DNA_NN1: values from Breslauer et al. (1986)
-                - DNA_NN2: values from Sugimoto et al. (1996)
-                - DNA_NN3: values from Allawi & SantaLucia (1997) (default)
-                - DNA_NN4: values from SantaLucia & Hicks (2004)
-
-            * For RNA/RNA hybridizations:
-
-                - RNA_NN1: values from Freier et al. (1986)
-                - RNA_NN2: values from Xia et al. (1998)
-                - RNA_NN3: valuse from Chen et al. (2012)
-
-            * For RNA/DNA hybridizations:
-
-                - R_DNA_NN1: values from Sugimoto et al. (1995)
-
-           Use the module's maketable method to make a new table or to update one
-           one of the implemented tables.
-
-        2. Thermodynamic values for internal mismatches, may include insosine
-           mismatches. Default: DNA_IMM1 (Allawi & SantaLucia, 1997-1998 Peyret et
-           al., 1999; Watkins & SantaLucia, 2005)
-        3. dangling: Thermodynamic values for dangling ends:
-            - DNA_DE1: for DNA. Values from Bommarito et al. (2000). Default
-            - RNA_DE1: for RNA. Values from Turner & Mathews (2010)
-
-     - seqconcentration: Concentration of the higher concentrated strand [nM]. Typically
-       this will be the primer (for PCR) or the probe. Default=25.
-     - oligoconcentration: Concentration of the lower concentrated strand [nM]. In PCR this
-       is the template strand which concentration is typically very low and may
-       be ignored (oligoconcentration=0). In oligo/oligo hybridization experiments, seqconcentration
-       equals seqconcentration. Default=25.
-       MELTING and Primer3Plus use k = [Oligo(Total)]/4 by default. To mimic
-       this behaviour, you have to divide [Oligo(Total)] by 2 and assign this
-       concentration to seqconcentration and oligoconcentration. E.g., Total oligo concentration of
-       50 nM in Primer3Plus means seqconcentration=25, oligoconcentration=25.
-       the primer is thought binding to itself, thus oligoconcentration is not considered.
-     - conc_Na, conc_K, conc_Tris, Mg, dNTPs: See method 'Tm_GC' for details. Defaults: conc_Na=50,
-       conc_K=0, conc_Tris=0, Mg=0, dNTPs=0.
-     - saltcorr: See method 'Tm_GC'. Default=5. 0 means no salt correction.
-    """
-    def __init__(self, **_):
-        self.force        : float             = 8.5
-        self.rate         : float             = 1.e-6
-        self.fork_tau_mul : float             = 2.8
-        self.table        : NNDATA            = {}
-        self.settables()
-
-        self.salt         : Salt              = Salt()
-        self.loop         : bool              = False
-        self.temperatures : Temperatures      = Temperatures(**_)
-        self.elasticity   : SingleStrandModel = SingleStrandModel(**_)
-        for i in set(self.__dict__) & set(_):
-            setattr(self, i, _[i])
-
-    def settables(
-            self,
-            nomiss       = ("DNA_NN3", "LNA_DNA_NN2"),
-            internalmiss = ("DNA_IMM1", "LNA_DNA_IMM1"),
-            dangling     = "DNA_DE1",
-            terminal     = ("DNA_TMM1", "LNA_DNA_TMM1")
-    ):
+    def nstates(self, nzipped = -1) -> int:
         """
-        sets the table for non-missmatches (1), internal missmatches (2) and
-        dangling ends (3)
+        The number of different states provided *both* ends can de-hybredize.
+
+        The argument *nzipped* tells how many bases are zipped starting from the
+        left: this is the effect of the fork.
         """
-        self.table = nndata(nomiss, internalmiss, dangling, terminal)
-        return self
+        assert self.dsbegin > 1 and self.dsend < len(self.seq)
+        nds = max(0, self.dsend - max(nzipped+1, self.dsbegin))
+        return (nds*(nds-1))//2+1
 
-    def setmode(self, mode:str):
-        "sets the computation mode"
-        if mode == 'oligo':
-            self.salt.encercling = False
-            self.loop            = True
-            self.force           = 0
-        elif mode == 'fork':
-            self.loop            = False
-            self.force           = 8.5
-            self.fork_tau_mul    = 2.8
-        elif mode == 'apex':
-            self.salt.encercling = True
-            self.force           = 5.
-            self.loop            = True
-        return self
+class StatesTransitions(BaseComputations):
+    "compute results for complex states"
+    def __init__(self, hpin, *oligos, chpin = None, **_):
+        super().__init__(**_)
+        self.hpin   = Strands(hpin, opposite = chpin)
+        self.oligos = sorted(
+            [self.newstrands(*oligos[i:i+2]) for i in range(0, len(oligos), 2)],
+            key = lambda x: x.dsbegin
+        )
 
-    def energies(
-            self,
-            comp,
-            shift    : int = 0,
-            rhoseq   : int = 25,
-            rhooligo : int = 25
-    ):
-        "computes the δ enthalpies & entropies"
-        self.__shift(shift, comp) # compute resized sequences, withouth overdangling ends
-        comp.resetdg()            # make sure dg & dgh have updated sizes
+        assert np.all(np.diff([i.dsend for i in self.oligos if i.isoligo]) > 0)
+        assert np.all(np.diff([i.dsend for i in self.oligos if i.iscoligo]) > 0)
 
-        # Now for terminal mismatches
-        off_bp = self.__terminal_mismatches(comp)
+    def newstrands(self, oligo:str, shift:int) -> Strands:
+        "create a new strand"
+        return (
+            Strands(seq = self.hpin.seq, opposite = oligo,              shift = shift)
+            if shift < 0 else
+            Strands(seq = oligo,         opposite = self.hpin.opposite, shift = shift)
+        )
 
-        # Now everything 'unusual' at the ends is handled and removed and we can
-        # look at the initiation.
-        # One or several of the following initiation types may apply:
+    def nstates(self) -> np.ndarray:
+        """
+        number of different states
+        """
+        inds = np.array([(i.dsbegin, i.dsend) for i in self.oligos], dtype = 'i4')
+
+        out  = 1 # the ∅ state
+        for i in range(len(self.hpin.seq)):
+            # hairpin is now zipped up to *i*
+            nvals  = cast(np.ndarray, np.maximum(inds[:,1]-np.maximum(inds[:,0], i+1), 0))
+            out   += np.prod((nvals*(nvals-1))//2 + 1)
+        return out
+
+    def states(self) -> np.recarray:
+        """
+        all the different states
+        """
+        inds  = np.array([(i.dsbegin, i.dsend) for i in self.oligos], dtype = 'i4')
+        maxs  = int(np.round(np.log10(len(self.hpin.seq))))+1
+        assert maxs^2 < np.iinfo('u4').max()
+
+        inner = [
+            (
+                np.insert(
+                    np.cumsum(list(range(i.dsend-i.dsbegin-1))[::-1], dtype = 'i4'),
+                    0, 0
+                ),
+                np.append(
+                    np.array(
+                        chain(
+                            range((j-1)*maxs+j+1, (j-1)*maxs+i.dsend+1)
+                            for j in range(i.dsbegin+1, i.dsend)
+                        ),
+                        dtype = 'u4'
+                    ),
+                    0, 0
+                ),
+                i.dsbegin
+            ) for i in self.oligos
+        ]
+
+        prev = cur = 0
+        outs = np.zeros((self.nstates(), 2 + len(inds)), dtype = 'f4')
+        for i in range(len(self.hpin.seq)):
+            nvals     = cast(np.ndarray, np.maximum(inds[:,1]-np.maximum(inds[:,0], i+1), 0))
+            cur      += np.prod((nvals*(nvals-1))//2 + 1)
+            outs[prev:cur, 1]  = i+1
+            outs[prev:cur, 2:] = list(
+                product(*(k[j[max(i+1, l)]:,:] for j, k, l in inner))
+            )
+        outs[:,0] = np.arange(outs.shape[0], dtype = 'i4')
+
+        cols   = ["state", "hp", *(f"o{i}" for i in range(len(self.oligos)))]
+        return np.recarray(
+            (outs.size[0],),
+            names   = cols,
+            formats = ('i4',)*len(cols),
+            buf     = outs
+        )
+
+    def transitions(self) -> np.ndarray:
+        """
+        all the different states's
+        """
+        states = self.states()
+        maxs   = int(np.round(np.log10(len(self.hpin.seq))))+1
+        trans  = np.zeros((len(states),)*2, dtype = 'f4')
+
+        self.__hairpintransitions(states, trans)
+
+
+        for i in range(len(self.oligos)):
+            self.__oligotransitions(i, maxs, states, trans)
+
+    def rco(self):
+        "return closing factors"
+        return -self.elasticity.rco(self.temperatures)*np.array([-1, 1], dtype = 'f4')
+
+    def roo(self, strands:Strands):
+        "create the roo vector"
+        dgpb = self.dgperbase(strands)
+
+        dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
+        dgt  = self.dgcor(self.table['init_G/C'])
+
+        roo         = np.zeros((len(dgpb)+1,2), dtype = 'f4')
+        roo[:-1,0]  = np.exp(-dgpb)
+        roo[:-1,1]  = roo[:-1,0]
+        roo[:-1,1] *= np.exp(-dgt)
+        if strands.seq[strands.dsbegin] in 'AaTt':
+            roo[0,:]  = np.exp(-dgpb[0]-dgt0), np.exp(-dgpb[0]-dgt0-dgt)
+        if strands.seq[strands.dsend-1] in 'AaTt':
+            roo[-2,:] = np.exp(-dgpb[-1]+dgt0), np.exp(-dgpb[-1]+dgt0-dgt)
+        return np.kron(roo, [-1., 1.]).reshape((-1, 2, 2))
+
+    def delta(self, strands:Strands) -> np.ndarray:
+        "compute the deltas"
+        dsseq   = strands.dsseq
+        delta    = np.array([0., 0.], dtype = 'f8')
 
         # Type: General initiation value
-        comp.delta += self.table['init']
+        delta += self.table['init']
 
         # Type: Duplex with no (allA/T) or at least one (oneG/C) GC pair
-        comp.delta += self.table['init_'+('oneG/C' if gccontent(comp.oseq.upper()) else 'allA/T')]
+        delta += self.table['init_'+('oneG/C' if gccontent(dsseq.upper()) else 'allA/T')]
 
         # Type: Penalty if 5' end is T
-        comp.delta += self.table['init_5T/A'] * ((comp.oseq[0] in 'Tt')+(comp.oseq[-1] in 'Aa'))
+        delta += self.table['init_5T/A'] * ((dsseq[0] in 'Tt')+(dsseq[-1] in 'Aa'))
 
         # Type: Different values for G/C or A/T terminal basepairs
-        ends = (comp.oseq[0] + comp.oseq[-1]).upper()
+        ends = (dsseq[0] + dsseq[-1]).upper()
         for tpe in ("AT", "GC"):
-            tmp         = self.table[f'init_{tpe[0]}/{tpe[1]}']
-            comp.delta += sum(ends.count(i) for i in tpe) * np.array(tmp)
+            tmp   = self.table[f'init_{tpe[0]}/{tpe[1]}']
+            delta += sum(ends.count(i) for i in tpe) * tmp
 
-        dgt0         = self.__dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        comp.dg[0]  += dgt0*(comp.oseq[0]  in 'AaTt')
-        comp.dg[-1] += dgt0*(comp.oseq[-1] in 'AaTt')
-
-        # Finally, the 'zipping'
-        self.__zipping((comp.seq,  comp.oligo), comp.dg[off_bp:], comp.delta)
-        if not self.loop:
-            self.__zipping((comp.oseq, complement(comp.oseq)),  comp.dgh, None)
-
-        # We compute salt correction for the hybridized oligo that is with
-        # reduced charge near dsDNA
-        saltinfo  = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)
-        comp.dg  += self.cor*saltinfo[0]
-        comp.dgh += self.cor*saltinfo[0]
-
-    def states(
-            self,
-            comp,
-            rhoseq   : int = 25,
-            rhooligo : int = 25
-    ):
-        "return the states matrix"
-        # roo[0] opening of the first 5' base of the oligo towards the fork
-        # l is an index over all possible configurations
-        #ind[i, j]  is the index of the configuration :
-        # i = position of the opening front on the 5' end, [0, nn-1]
-        # j = position of the opening front on the 3' end, nn-1 nothing open
-        # loop version
-        nbases, inds = self.__state_indexes(comp)
-        mat          = self.__transitions(nbases, inds, comp)
-        if self.loop:
-            saltinfo  = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)
-            self.__encircling(saltinfo[1], inds, mat)
-        else:
-            self.__fork(comp, inds, mat)
-        return mat, inds
-
-    def __call__( # pylint: disable=too-many-arguments
-            self,
-            sequence : str, # 3'-> 5'
-            oligo    : str, # 5'-> 3'
-            shift    : int = 0,
-            rhoseq   : int = 25,
-            rhooligo : int = 25
-    ):
-        comp        = ComputationDetails(sequence, oligo)
-        self.energies(comp, shift, rhoseq, rhooligo)
-        trep = self.__trep(comp, *self.states(comp, rhoseq, rhooligo))
-
-        temp, delta = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)[2:]
-        dgf         = self.cor*delta+((len(comp.oseq)-1)*(self.gss-self.gds))
-        return (
-            trep,
-            1/trep,                         # kon
-            1/(trep*np.exp(dgf) * 1000000), # koff
-            dgf,
-            temp
-        )
-
-    gds = property(lambda self: self.elasticity.gds(self.force, self.temperatures))
-    gss = property(lambda self: self.elasticity.gss(self.force, self.temperatures))
-    cor = property(lambda self: 1.0/(R*self.temperatures.mtG)) # cal/conc_K-mol
-
-    def __terminal_mismatches(self, comp) -> bool:
-        for i in (0, -1):
-            val = self.table.get(comp.terminalkey(i), None)
-            if val is not None:
-                comp.delta += val
-                comp.dg[i] += self.__dgcor(val)
-                comp.pop(i)
-        return comp.oseq[0] != comp.seq[0]
-
-    def __trep(self, comp, mat, inds):
-        #initial state: nn open bases for the hairpin 0 open bases for the oligo
-        ini                                                     = np.zeros(mat.shape[0])
-        ini[inds[(0,)*(len(inds.shape)-1)+(len(comp.oseq)-1,)]] = 1
-
-        #holding state: all possible configurations
-        hold                                                    = np.ones_like(ini)
-
-        # between the initil and final state
-        trep =-self.rate*((np.matrix(mat).I @ ini) @ hold)[0,0]
-        if not self.loop:
-            trep *= self.fork_tau_mul
-        return trep
-
-    def __dgcor(self, delta):
-        return -self.cor*(delta[0]-delta[1]*self.temperatures.mtG)
-
-    def __shift(self, shift:int, comp:ComputationDetails):
-        # Dangling ends?
-        if shift or len(comp.seq) != len(comp.oligo):
-            # Align both sequences using the shift parameter
-            bigger      = len(comp.seq) > len(comp.oligo)
-            smaller     = len(comp.seq) < len(comp.oligo)
-            comp.seq    = '.' * (shift < 0 or smaller) + comp.seq[max(shift-1,  0):]
-            comp.oligo  = '.' * (shift > 0 or bigger)  + comp.oligo[max(-shift-1, 0):]
-
-            bigger      = len(comp.seq) > len(comp.oligo)
-            smaller     = len(comp.seq) < len(comp.oligo)
-            comp.seq    = comp.seq[:len(comp.oligo)+bigger]  + '.' * smaller
-            comp.oligo  = comp.oligo[:len(comp.seq)+smaller] + '.' * bigger
-
-            # Now for the dangling ends
-            for ind in (0, -1):
-                if any(i[ind] == "." for i in (comp.seq, comp.oligo)):
-                    comp.delta += self.table.get(comp.key(ind), 0.)
-                    comp.pop(ind)
-            comp.oseq   = comp.seq
-            comp.ooligo = comp.oligo
-            if len(comp.seq) <= 1 or len(comp.oligo) <= 1:
-                raise NotImplementedError("Don't deal with single base oligos")
-
-    def __state_indexes(self, comp):
-        nbases = len(comp.oseq)
-        ind    = np.zeros((nbases,)*(3-self.loop), dtype='i8')
-        cnt    = 0
-        if self.loop:
-            itr: Callable[[int], Iterator] = lambda i: iter(((i,),))
-        else:
-            itr = lambda i: ((i, j) for j in range(i+1))
-
-        for i in range(nbases):
-            for j in cast(Iterator, itr(i)):
-                ind[j+(slice(i+1, nbases),)] = np.arange(nbases-i-1) + cnt
-                cnt    += nbases-i-1
-
-        return nbases, ind
-
-    @staticmethod
-    def __iter5prime(inds):
-        nbases = inds.shape[0]
-        if len(inds.shape) == 2:
-            yield from (
-                (inds[i,j], inds[i+1,j], i, j-i > 2)
-                for j in range(2,nbases) for i in range(j-1)
-            )
-            return
-
-        yield from (
-            (inds[i,j,k], inds[i+1,j, k], i, k-i > 2)
-            for j in range(nbases-1) for i in range(j,nbases-2) for k in range (i+2,nbases)
-        )
-
-    @staticmethod
-    def __iter3prime(inds):
-        nbases = inds.shape[0]
-        if len(inds.shape) == 2:
-            yield from (
-                (inds[i,j], inds[i,j-1], j-1, j-i > 2)
-                for i in range(nbases) for j in range(i+2, nbases)
-            )
-            return
-        yield from (
-            (inds[i,j,k], inds[i,j,k-1], k-1, k-i > 2)
-            for i in range(nbases) for j in range(i+1) for k in range(i+2, nbases)
-        )
-
-    @staticmethod
-    def __iterescaping(nbases, inds):
-        if len(inds.shape) == 2:
-            yield from ((inds[i,i+1], i) for i in range(nbases-1))
-            return
-
-        yield from ((inds[i,j,i+1], i) for i in range (nbases-1) for j in range(i+1))
-
-    def __roo(self, comp):
-        dgt0 = self.__dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        roo  = np.append(np.exp(-comp.dg),     0)
-        if comp.seq[0] in 'AaTt':
-            roo[0]  = np.exp(-comp.dg[0]-dgt0)
-        if comp.seq[-1] in 'AaTt':
-            roo[-2] = np.exp(-comp.dg[-1]+dgt0)
-        return roo
-
-    def __roo2(self, comp):
-        dgt0 = self.__dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        dgt  = self.__dgcor(self.table['init_G/C'])
-        roo2 = np.append(np.exp(-comp.dg-dgt), 0)
-        if comp.seq[0] in 'AaTt':
-            roo2[0] = np.exp(-comp.dg[0]-dgt0-dgt)
-
-        if comp.seq[-1] in 'AaTt':
-            roo2[-2] = np.exp(-comp.dg[-1]+dgt0-dgt)
-        return roo2
-
-    def __transitions(self, nbases, inds, comp) -> np.ndarray:
-        roo  = self.__roo(comp)
-        roo2 = self.__roo2(comp)
-        mat  = np.zeros((inds.max()+1,)*2, dtype = 'f8')
-        rco  = self.elasticity.rco(self.force, self.temperatures)
-        for in0, in1, j, dist in chain(
-                self.__iter5prime(inds),
-                self.__iter3prime(inds)
-        ):
-            mat[in0, in1] += rco # closing
-            mat[in1, in1] += -rco # closing
-            mat[in1, in0] +=  (roo if dist else roo2)[j] # opening
-            mat[in0, in0] += -(roo if dist else roo2)[j] # opening
-
-
-        #escaping terms
-        for in0, i in self.__iterescaping(nbases, inds):
-            mat[in0,in0] += -roo2[i]
-        return mat
-
-    def __encircling(self, cordsbp, ind, mat):
-        r"""
-         \
-          \___/
-         ------
-        5'->i = 2  3'->j=5
-        5' end transitions possible state
-        """
-        # encircling transitions
-        # encircling rate for one bounded bp of the oligo
-        nbases = ind.shape[0]
-        ren    = self.salt.encirclingrate(self, cordsbp)
-        for i in range(3):
-            in0           = ind[i,nbases-i-1]
-            mat[in0,in0] += -ren**(nbases-i)
-
-    def __fork(self, comp, ind, mat):
-        """ 5' end transitions possible state"""
-        # hairpin transitions possible state
-        nbases = ind.shape[0]
-        rch    = self.elasticity.rch(self.force, self.temperatures)
-        roh    = np.append(np.exp(-comp.dgh),    0)
-        for i in range(1, nbases):
-            for j in range(i):
-                for k in range(i+1,nbases):
-                    in0 = ind[i,j,k]
-                    in1 = ind[i,j+1,k]
-                    mat[in0,in1] += roh[j]  # opening
-                    mat[in1,in1] += -roh[j] # opening
-                    mat[in1,in0] += rch     # closing
-                    mat[in0,in0] += -rch    # closing
-
-    def __zipping(self, seq, dg, delta):
-        key = KeyComputer(seq[0], seq[1]).key
-        tab = self.table
-        for i in range(len(seq[0]) - 1):
-            tmp = tab.get(key(i), None)
-            if tmp is None:
-                # We haven't found the key...
-                raise KeyError(f"Base not found {i}, {seq[0][i:i+2]}/{seq[1][i:i+2]}")
-
-            if delta is not None:
+        # Terminal endings
+        for _, key in chain(strands.terminalbases(), strands.danglingends()):
+            tmp = self.table.get(key, None)
+            if tmp is not None:
                 delta += tmp
-            dg[i] += self.__dgcor(tmp)
+
+        # inside bases
+        for _, key in strands.dsbases():
+            delta += self.table[key]
+        return delta
+
+    def dgperbase(self, strands:Strands) -> np.ndarray:
+        "compute the dg"
+        denthalpy = np.zeros(len(strands.seq), dtype = 'f8')
+
+        # Terminal endings
+        for i, key in strands.terminalbases():
+            tmp = self.table.get(key, None)
+            if tmp is not None:
+                denthalpy[i] += tmp
+
+        dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
+        for i in (strands.dsbegin, strands.dsend-1):
+            denthalpy[i] += dgt0*(strands.seq[i] in 'AaTt')
+
+        # inside bases
+        for i, key in strands.dsbases():
+            denthalpy[i] += self.dgcor(self.table[key])
+        return denthalpy
+
+    def __hairpintransitions(self, states, trans):
+        rco         = self.rco()
+        roo         = self.roo(self.hpin)[:,0]
+        other       = np.copy(states)
+        other.hpin += 1
+        joins       = list(states.dtype.names[1:])
+        for j in join_by(joins, states, other, usemask = False)[["state1", "state2"]]:
+            trans[j[0], j] += roo[j[0], :]
+            trans[j[1], j] += rco
+
+    def __oligotransitions(self, ioli, maxs, states, trans):
+        rco   = self.rco()
+        roo   = self.roo(self.oligos[ioli])
+        name  = f"o{ioli}"
+        joins = list(states.dtype.names[1:])
+
+        other                               = np.copy(states)
+        ind                                 = other[name]
+        ind[:]                             += 1
+        ind[(ind % maxs)  >= (ind // maxs)] = 0
+        for i, j, k in join_by(joins, states, other, usemask = False)[[name, "state1", "state2"]]:
+            trans[j, [j, k]] += roo[j, i//maxs-(i%maxs) < 2, :]
+            trans[k, [j, k]] += rco
+
+        ind[:]                              = states[name]-maxs
+        ind[(ind % maxs)  >= (ind // maxs)] = 0
+        for i, j, k in join_by(joins, states, other, usemask = False)[[name, "state1", "state2"]]:
+            trans[j, [j, k]] += roo[j, i//maxs-(i%maxs) < 2, :]
+            trans[k, [j, k]] += rco
