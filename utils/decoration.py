@@ -86,6 +86,7 @@ def fromstream(streamopts):
 
 @contextmanager
 def _escapenans(*arrays: np.ndarray, reset = True):
+    # pylint: disable=invalid-unary-operand-type
     if len(arrays) == 0:
         yield tuple()
         return
