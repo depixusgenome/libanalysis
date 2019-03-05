@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Runs an app"
-from   copy    import copy, deepcopy
-from   pathlib import Path
+from   copy      import copy, deepcopy
+from   pathlib   import Path
+from   time      import time
+from   functools import partial
 import logging
 import sys
 import subprocess
@@ -116,9 +118,35 @@ def _launch(filtr, view, app, gui, kwa):
 def _port(port):
     return int(random.randint(5000, 8000)) if port == 'random' else int(port)
 
+CONFIGS = 'display', 'theme'
 def _config(lines):
     if len(lines) == 0:
         return
+
+    def _update_with_ctrl(ctrl, args, val):
+        names, attrs = args.split("@")
+        if not any(names.startswith(i) for i in CONFIGS):
+            names = "theme."+names
+
+        cnf   = getattr(ctrl, names[:names.find('.')])
+        names = names[names.find('.')+1:]
+        if '.' in attrs:
+            attrs = attrs.split('.')
+            mdl   = cur = copy(cnf.get(names, attrs[0]))
+            for i in attrs[1:-1]:
+                cur = getattr(cur, i)
+            setattr(cur, attrs[-1], type(getattr(cur, attrs[-1]))(val))
+            cnf.update(names, **{attrs[0]: mdl})
+        else:
+            mdl = type(cnf.get(names, attrs))(val)
+            cnf.update(names, **{attrs: mdl})
+
+    def _update_directly(ctrl, args, val):
+        attrs = args.split('.')
+        cur   = ctrl
+        for i in attrs[:-1]:
+            cur = getattr(cur, i)
+        setattr(cur, attrs[-1], val)
 
     def _fcn(ctrl):
         for line in lines:
@@ -133,44 +161,40 @@ def _config(lines):
                 # shortcut for selecting a tab
                 line = "theme.app.tabs@initial="+line
 
-            args,  val   = line.split('=')
-            names, attrs = args.split("@")
-            if not any(names.startswith(i) for i in ('display', 'theme')):
-                names = "theme."+names
-
-            cnf          = getattr(ctrl, names[:names.find('.')])
-            names        = names[names.find('.')+1:]
-
-            if '.' in attrs:
-                attrs = attrs.split('.')
-                mdl   = cur = copy(cnf.get(names, attrs[0]))
-                for i in attrs[1:-1]:
-                    cur = getattr(cur, i)
-                setattr(cur, attrs[-1], type(getattr(cur, attrs[-1]))(val))
-                cnf.update(names, **{attrs[0]: mdl})
+            args,  val = line.split('=')
+            if '@' in args:
+                _update_with_ctrl(ctrl, args, val)
             else:
-                mdl = type(cnf.get(names, attrs))(val)
-                cnf.update(names, **{attrs: mdl})
+                _update_directly(ctrl, args, val)
 
     INITIAL_ORDERS.default_config = _fcn
 
-def _version(ctx, _, value):
+def _version(softname, ctx, _, value):
     import version
     if not value or ctx.resilient_parsing:
         return
-    click.echo('TrackAnalysis  ' + version.version())
+    click.echo(f'{softname} ' + version.version())
     click.echo(' - git hash:   ' + version.lasthash())
     click.echo(' - created on: ' + version.hashdate())
     click.echo(' - compiler:   ' + version.compiler())
     ctx.exit()
 
-# pylint: disable=too-many-arguments
-def defaultmain(filtr, config, view, gui, port, raiseerr, nothreading, defaultapp):
-    "Launches an view"
-    _config(config)
-    _debug(raiseerr, nothreading)
-    _win_opts()
+def defaultinit(config, wall, raiseerr, nothreading):
+    "default start"
+    if wall:
+        WARNINGS.set(True)
 
+    @INITIAL_ORDERS.append
+    def _started(_, start = time()):
+        LOGS.info("done loading in %d seconds", time()-start)
+
+    _config(config)
+    _win_opts()
+    _debug(raiseerr, nothreading)
+
+# pylint: disable=too-many-arguments
+def defaultmain(filtr, view, gui, port, defaultapp):
+    "Launches an view"
     kwargs = dict(port = _port(port), apponly = False)
     server = _launch(filtr, view, defaultapp, gui, kwargs)
 
@@ -185,7 +209,7 @@ def defaultmain(filtr, config, view, gui, port, raiseerr, nothreading, defaultap
     server.run_until_shutdown()
     logging.shutdown()
 
-def defaultclick(*others):
+def defaultclick(softname, *others, defaultview = None):
     """
     sets default command line options
     """
@@ -219,9 +243,13 @@ def defaultclick(*others):
         for i in others:
             fcn = i(fcn)
 
-        fcn = click.argument('view')(fcn)
-        fcn = click.option('--version', is_flag = True, callback = _version,
-                           expose_value = False, is_eager = True)(fcn)
+        fcn = click.argument('view', default = defaultview)(fcn)
+        fcn = click.option('--version',
+                           is_flag      = True,
+                           callback     = partial(_version, softname),
+                           expose_value = False,
+                           is_eager     = True
+                          )(fcn)
 
         return click.command()(fcn)
     return _wrapper
@@ -233,7 +261,6 @@ class Warnings:
 
     def set(self, yes: bool):
         "sets the warnings"
-
         if yes:
             warnings.filterwarnings('error', category = RuntimeWarning, message = ".*All-NaN.*")
             warnings.filterwarnings('error', category = FutureWarning)
