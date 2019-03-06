@@ -16,6 +16,7 @@ except ImportError:
 
 from   ._data       import nndata, R, T0, NNDATA
 
+SaltInfo = Tuple[float, float, float, float]
 class Salt: # pylint: disable=too-many-instance-attributes
     "salt"
     def __init__(self, **_):
@@ -59,10 +60,12 @@ class Salt: # pylint: disable=too-many-instance-attributes
             self.encirclingbp    = 2
             self.encirclingcoeff = 0.3
 
-    def compute(self, rhoseq, rhooligo, mtg, comp) -> Tuple[float, float, float, float]:
+    def compute( # pylint: disable=too-many-arguments
+            self, seq, rhoseq, rhooligo, mtg, delta
+    ) -> SaltInfo:
         "compute salt corrections"
         rlogk            = R*np.log((rhoseq - (rhooligo / 2.0)) * 1e-9)
-        delta_h, delta_s = comp.delta*[1e3, 1]
+        delta_h, delta_s = delta*[1e3, 1]
         corrh            = self.salt_correction(
             Na     = self.rhoNa,
             K      = self.rhoK,
@@ -70,7 +73,7 @@ class Salt: # pylint: disable=too-many-instance-attributes
             Mg     = self.rhoMg,
             dNTPs  = self.rhodNTPs,
             method = self.method,
-            seq    = comp.oseq
+            seq    = seq
         )
         corr  =  self.dsCharge * corrh
 
@@ -95,8 +98,8 @@ class Salt: # pylint: disable=too-many-instance-attributes
 
         # energy between the oligo and template (can be LNA/DNA)
         return (
-            (cords/(len(comp.oseq)-1))* mtg,
-            (delta_sc - delta_s)/(len(comp.oseq)-1),
+            (cords/(len(seq)-1))* mtg,
+            (delta_sc - delta_s)/(len(seq)-1),
             meltingtemp,
             delta_h*1e-3 - (delta_sc) *mtg
         )

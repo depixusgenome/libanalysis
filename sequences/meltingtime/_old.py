@@ -139,7 +139,9 @@ class OldStatesTransitions(BaseComputations): # pylint: disable=too-many-instanc
 
         # We compute salt correction for the hybridized oligo that is with
         # reduced charge near dsDNA
-        saltinfo  = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)
+        saltinfo  = self.salt.compute(comp.oseq,
+                                      rhoseq, rhooligo, self.temperatures.mtG,
+                                      comp.delta)
         comp.dg  += self.cor*saltinfo[0]
         comp.dgh += self.cor*saltinfo[0]
 
@@ -159,7 +161,9 @@ class OldStatesTransitions(BaseComputations): # pylint: disable=too-many-instanc
         nbases, inds = self.__state_indexes(comp)
         mat          = self.__transitions(nbases, inds, comp)
         if self.loop:
-            saltinfo  = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)
+            saltinfo  = self.salt.compute(comp.oseq,
+                                          rhoseq, rhooligo, self.temperatures.mtG,
+                                          comp.delta)
             self.__encircling(saltinfo[1], inds, mat)
         else:
             self.__fork(comp, inds, mat)
@@ -177,7 +181,9 @@ class OldStatesTransitions(BaseComputations): # pylint: disable=too-many-instanc
         self.energies(comp, shift, rhoseq, rhooligo)
         trep = self.__trep(comp, *self.states(comp, rhoseq, rhooligo))
 
-        temp, delta = self.salt.compute(rhoseq, rhooligo, self.temperatures.mtG, comp)[2:]
+        temp, delta = self.salt.compute(comp.oseq,
+                                        rhoseq, rhooligo, self.temperatures.mtG,
+                                        comp.delta)[2:]
         dgf         = self.cor*delta+((len(comp.oseq)-1)*(self.gss-self.gds))
         return (
             trep,
