@@ -5,7 +5,7 @@ from    abc                     import ABC, abstractmethod
 from    collections             import OrderedDict
 from    contextlib              import contextmanager
 from    functools               import wraps, partial
-from    time                    import clock
+from    time                    import process_time as clock
 from    threading               import RLock
 from    typing                  import (Tuple, Optional, Type, Union, Any, Generic,
                                         Dict, TypeVar, List, Iterable, cast)
