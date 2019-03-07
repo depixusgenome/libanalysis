@@ -309,7 +309,7 @@ class PlotThemeView(PlotTheme):
 
     def figargs(self, **kwa) -> Dict[str, Any]:
         "create a figure"
-        tips = kwa.pop('tooltips', self.tooltips)
+        tips   = kwa.pop('tooltips', self.tooltips)
         args = {'toolbar_sticky':   self.toolbar['sticky'],
                 'toolbar_location': self.toolbar['location'],
                 'tools':            self.toolbar['items'],
@@ -342,7 +342,11 @@ class PlotThemeView(PlotTheme):
 
     def figure(self, **kwa) -> Figure:
         "creates a figure"
+        extras = {i: kwa.pop(f'extra_{i}_ranges', None) for i in 'xy'}
         fig = figure(**self.figargs(**kwa))
+        for i, j in extras.items():
+            if j:
+                setattr(fig, f'extra_{i}_ranges', j)
         if self.toolbar.get('hide', False):
             fig.toolbar.autohide = True
         fig.toolbar.logo = None

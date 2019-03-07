@@ -105,6 +105,33 @@ class _FunctionHandler(FunctionHandler):
             self.io_loop.stop()
         Server.stop = _stop
 
+        import bokeh
+        if bokeh.__version__ == '1.0.4':
+            from bokeh.models.plots import Plot, error, BAD_EXTRA_RANGE_NAME
+            @error(BAD_EXTRA_RANGE_NAME)
+            def _check_bad_extra_range_name(self):
+                msg = ""
+                for ref in self.renderers:
+                    prop_names = ref.properties()
+                    bad = []
+                    if 'x_range_name' in prop_names and 'y_range_name' in prop_names:
+                        if (
+                                ref.x_range_name not in self.extra_x_ranges
+                                and ref.x_range_name != "default"
+                        ):
+                            bad.append(('x_range_name', ref.x_range_name))
+                        if (
+                                ref.y_range_name not in self.extra_y_ranges
+                                and ref.y_range_name != "default"
+                        ):
+                            bad.append(('y_range_name', ref.y_range_name))
+                    if bad:
+                        if msg:
+                            msg += ", "
+                        msg += (", ".join("%s=%r" % (a, b) for (a,b) in bad) + " [%s]" % ref)
+                return msg if msg else None
+            setattr(Plot, '_check_bad_extra_range_name', _check_bad_extra_range_name)
+
     @staticmethod
     def __server_kwargs(kwa)-> Dict[str, Any]:
         kwa.setdefault('sign_sessions',        settings.sign_sessions())

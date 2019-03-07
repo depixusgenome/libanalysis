@@ -9,17 +9,17 @@ import inspect
 warnings.filterwarnings('ignore',
                         category = DeprecationWarning,
                         message  = '.*elementwise == comparison failed.*')
-warnings.filterwarnings('ignore',
-                        category = DeprecationWarning,
-                        message  = '.* deprecated in Bokeh 0.12.6 .*')
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category = DeprecationWarning)
+    warnings.filterwarnings('ignore', category = DeprecationWarning,
+                            message  = ".*Using or importing the ABCs from 'collections'.*")
     import pytest
     from bokeh.model                import Model
     from bokeh.document             import Document
     from bokeh.server.server        import Server
     import bokeh.core.properties    as     props
+    import bokeh.plotting.figure # pylint: disable=unused-import
 
 # pylint: disable=wrong-import-position
 from tornado.platform.asyncio       import AsyncIOMainLoop
@@ -382,6 +382,10 @@ class _ManagedServerLoop:
 class BokehAction:
     "All things to make gui testing easy"
     def __init__(self, mkpatch):
+        if mkpatch is None:
+            from _pytest.monkeypatch import MonkeyPatch
+            warnings.warn("Unsafe call to MonkeyPatch. Use only for manual debugging")
+            mkpatch = MonkeyPatch()
         self.monkeypatch = mkpatch
         tmp = tempfile.mktemp()+"_test"
         class _Dummy:
@@ -419,8 +423,4 @@ def bokehaction(monkeypatch):
     be accessed directly, for example BokehAction.view._ctrl  can be accessed
     through BokehAction.ctrl.
     """
-    if monkeypatch is None:
-        from _pytest.monkeypatch import MonkeyPatch
-        warnings.warn("Unsafe call to MonkeyPatch. Use only for manual debugging")
-        monkeypatch = MonkeyPatch()
     return BokehAction(monkeypatch)
