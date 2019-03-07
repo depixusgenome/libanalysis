@@ -12,6 +12,8 @@ warnings.filterwarnings('error', category = DeprecationWarning)
 warnings.filterwarnings('error', category = PendingDeprecationWarning)
 warnings.filterwarnings('ignore', category = DeprecationWarning,
                         message  = '.*generator .* raised StopIteration.*')
+warnings.filterwarnings('ignore', category = DeprecationWarning,
+                        message  = '.*the imp module is deprecated.*')
 np.seterr(all='raise')
 
 class ResourcePath:
