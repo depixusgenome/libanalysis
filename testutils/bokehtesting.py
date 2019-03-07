@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Utils for testing views"
+from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
 import tempfile
 import warnings
@@ -237,18 +238,24 @@ class _ManagedServerLoop:
         self.__warnings.__enter__()
         warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
 
+        time = process_time()
+        haserr = [False]
         def _start():
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
                 self.loop.call_later(2., self.loop.stop)
+            elif process_time()-time > 20:
+                haserr[0] = True
+                self.loop.stop()
             else:
-                LOGS.debug("waiting")
+                LOGS.debug("waiting %s", process_time()-time)
                 self.loop.call_later(0.5, _start)
         _start()
 
         self.server.start()
         self.loop.start()
+        assert not haserr[0], "could not start gui"
         return self
 
     def __exit__(self, *_):
