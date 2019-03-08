@@ -893,7 +893,7 @@ class PlotView(Generic[PlotType], BokehView):
         super().__init__(ctrl, **kwa)
 
         def _gesture(name, meta):
-            return {name+'rate'    : .2,
+            return {name+'rate'    : .8 if name == 'zoom' else .2,
                     name+'activate': meta[:-1],
                     name+'xlow'    : meta+'ArrowLeft',
                     name+'xhigh'   : meta+'ArrowRight',
