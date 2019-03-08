@@ -247,6 +247,7 @@ class _ManagedServerLoop:
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
+                setattr(self.ctrl, 'CATCHERROR', False)
                 self.loop.call_later(2., self.loop.stop)
             elif process_time()-time > 20:
                 haserr[0] = True
