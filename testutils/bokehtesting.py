@@ -10,11 +10,11 @@ import inspect
 warnings.filterwarnings('ignore',
                         category = DeprecationWarning,
                         message  = '.*elementwise == comparison failed.*')
+warnings.filterwarnings('ignore', category = DeprecationWarning,
+                        message  = ".*Using or importing the ABCs from 'collections'.*")
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category = DeprecationWarning)
-    warnings.filterwarnings('ignore', category = DeprecationWarning,
-                            message  = ".*Using or importing the ABCs from 'collections'.*")
     import pytest
     from bokeh.model                import Model
     from bokeh.document             import Document
@@ -41,7 +41,7 @@ class DpxTestLoaded(Model):
     done        = props.Int(0)
     event       = props.Dict(props.String, props.Any)
     event_cnt   = props.Int(0)
-    model       = props.Instance(Model)
+    modelid     = props.String('')
     attrs       = props.List(props.String, default = [])
     attr        = props.String()
     value       = props.Any()
@@ -69,14 +69,14 @@ class DpxTestLoaded(Model):
                    ctrl  = 'Control-' in key,
                    meta  = 'Meta-'    in key,
                    key   = val)
-        self.model = model
+        self.modelid = model.id
         self.event = evt
         LOGS.debug("pressing: %s", key)
         self.event_cnt += 1
 
     def change(self, model:Model, attrs: Union[str, Sequence[str]], value: Any):
         "Changes a model attribute on the browser side"
-        self.model = model
+        self.modelid = model.id
         self.attrs = list(attrs)[:-1] if isinstance(attrs, (tuple, list)) else []
         self.attr  = attrs[-1]        if isinstance(attrs, (tuple, list)) else attrs
         self.value = value
@@ -147,7 +147,10 @@ class _ManagedServerLoop:
     @property
     def loading(self) -> Optional[DpxTestLoaded]:
         "returns the model which allows tests to javascript"
-        return next(iter(getattr(self.doc, 'roots', [])), None)
+        return next(
+            (i for i in getattr(self.doc, 'roots', []) if isinstance(i, DpxTestLoaded)),
+            None
+        )
 
     class _Dummy:
         @staticmethod
