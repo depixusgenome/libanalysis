@@ -397,11 +397,11 @@ class PlotUpdater(list):
 
 class AxisOberver:
     "observe an axis"
-    def __init__(self, view, fig: Figure, display = None):
+    def __init__(self, view, fig: Figure, display = None, theme = None):
         self._fig          = fig
         self._view         = view
         self._display: str = (getattr(view, '_display') if display is None else display).name
-        self._theme:   str = getattr(view, '_theme').name
+        self._theme:   str = (getattr(view, '_theme')   if theme   is None else theme).name
         self._updating     = False
 
     @property
@@ -642,17 +642,21 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
         self._updater.append((itm.addto(fig, theme, **attrs), name, attrs))
         return self._updater[-1][0]
 
-    def newbounds(self, axis, arr) -> dict:
+    def newbounds(self, axis, arr, **kwa) -> dict:
         "Sets the range boundaries"
-        return AxisOberver(self, None).newbounds(axis, arr)
+        return AxisOberver(self, None, **kwa).newbounds(axis, arr)
 
     def setbounds(self, *args, **kwa):
         "Sets the range boundaries"
-        return AxisOberver(self, None).setbounds(*args, **kwa)
+        return AxisOberver(
+            self,
+            None,
+            **{i: kwa.pop(i, None) for i in ('display', 'theme')}
+        ).setbounds(*args, **kwa)
 
-    def bounds(self, arr):
+    def bounds(self, arr, **kwa):
         "Returns boundaries for a column"
-        return AxisOberver(self, None).bounds(arr)
+        return AxisOberver(self, **kwa).bounds(arr)
 
     def linkmodeltoaxes(self, fig, mdl = None):
         "add observers between both the figure axes and the model"
