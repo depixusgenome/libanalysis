@@ -4,6 +4,7 @@
 from typing     import Dict, Any
 
 import sys
+import asyncio
 
 from tornado.platform.asyncio   import AsyncIOMainLoop
 from bokeh.application          import Application
@@ -191,6 +192,11 @@ def setup(locs,           #
     See `app.toolbar` for an example which sets-up a toolbar above any view provided
     as a argument.
     """
+    def _install():
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        AsyncIOMainLoop().make_current()
+
+
     def application(main,
                     creator  = creator,
                     controls = defaultcontrols,
@@ -205,7 +211,7 @@ def setup(locs,           #
               apponly  = False,
               **kwa):
         "Creates a browser app"
-        AsyncIOMainLoop().install()
+        _install()
         app = application(main, creator, controls, views)
         if apponly:
             return app
@@ -218,7 +224,7 @@ def setup(locs,           #
                apponly  = False,
                **kwa):
         "Creates a desktop app"
-        AsyncIOMainLoop().install()
+        _install()
         app = application(main, creator, controls, views)
         if apponly:
             return app
