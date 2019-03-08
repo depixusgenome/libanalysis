@@ -252,7 +252,7 @@ def intlistsummary(beads: Sequence[int], ordered = True, maxi = None) -> str:
             txt += ", "+str(beads[last])
         else:
             txt += f", {beads[last]}{', ' if last == len(beads)-2 else ' → '}{beads[-1]}"
-        return txt[2]+short
+        return txt[2:]+short
     return ', '.join(str(i) for i in beads)+short
 
 def leastcommonkeys(info, tail = ', ...') -> Dict[str, str]:
