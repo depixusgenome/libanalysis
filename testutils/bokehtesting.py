@@ -6,6 +6,7 @@ from   typing    import Optional, Union, Sequence, Any, cast
 import tempfile
 import warnings
 import inspect
+import logging
 
 warnings.filterwarnings('ignore',
                         category = DeprecationWarning,
@@ -31,6 +32,17 @@ from view.static                    import ROUTE
 from view.keypress                  import DpxKeyEvent
 
 LOGS = getLogger()
+class ErrorHandler(logging.Handler):
+    """
+    A handler class which  deals with errors comming from the server
+    """
+    def __init__(self):
+        super().__init__(level = logging.ERROR)
+        self.lst: list = []
+
+    def emit(self, record):
+        "emit"
+        self.lst.append(record)
 
 class DpxTestLoaded(Model):
     """
@@ -158,13 +170,14 @@ class _ManagedServerLoop:
             "dummy"
             return setattr(*args)
 
+    __warnings: Any
+    __hdl: ErrorHandler
     def __init__(self, mkpatch, kwa:dict) -> None:
-        self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.server: Server   = None
         self.view:   Any      = None
         self.doc:    Document = None
+        self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
-        self.__warnings: Any  = None
 
     @staticmethod
     def __import(amod):
@@ -237,6 +250,8 @@ class _ManagedServerLoop:
 
     def __enter__(self):
         self.server     = self.__buildserver(self.kwa)
+        self.__hdl      = ErrorHandler()
+        logging.getLogger().addHandler(self.__hdl)
         self.__warnings = warnings.catch_warnings()
         self.__warnings.__enter__()
         warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
@@ -266,6 +281,8 @@ class _ManagedServerLoop:
         if self.server is not None:
             self.quit()
         self.__warnings.__exit__(*_)
+        logging.getLogger().removeHandler(self.__hdl)
+        assert len(self.__hdl.lst) == 0, str(self.__hdl.lst)
 
     @staticmethod
     def path(path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
