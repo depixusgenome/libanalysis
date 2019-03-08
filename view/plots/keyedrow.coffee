@@ -60,10 +60,12 @@ export class DpxKeyedRow extends Row
             else
                 @_curr = null
 
-    _do_zoom: (zoomin, rng) ->
-        unless rng.bounds?
-            return
+    _bounds: (rng) ->
+        if rng.bounds
+            return rng.bounds
+        return [rng.reset_start, rng.reset_end]
 
+    _do_zoom: (zoomin, rng) ->
         center = (rng.end+rng.start)*.5
         delta  = rng.end-rng.start
         if zoomin
@@ -74,35 +76,34 @@ export class DpxKeyedRow extends Row
         rng.start = center - delta*.5
         rng.end   = center + delta*.5
 
-        if rng.bounds[0] > rng.start
-            rng.start = rng.bounds[0]
-        if rng.bounds[1] < rng.end
-            rng.end   = rng.bounds[1]
+        bounds = @_bounds(rng)
+        if bounds[0] > rng.start
+            rng.start = bounds[0]
+        if bounds[1] < rng.end
+            rng.end   = bounds[1]
 
     _do_pan: (panlow, rng) ->
-        unless rng.bounds?
-            return
-
-        delta     = (rng.end-rng.start)*@panrate*(if panlow then -1 else 1)
-        if rng.bounds[0] > rng.start + delta
-            delta = rng.bounds[0]-rng.start
-        if rng.bounds[1] < rng.end   + delta
-            delta = rng.bounds[1]-rng.end
+        bounds = @_bounds(rng)
+        delta  = (rng.end-rng.start)*@panrate*(if panlow then -1 else 1)
+        if bounds[0] > rng.start + delta
+            delta = bounds[0]-rng.start
+        if bounds[1] < rng.end   + delta
+            delta = bounds[1]-rng.end
 
         rng.start = rng.start + delta
         rng.end   = rng.end   + delta
 
     _do_reset: () ->
-        fig       = @fig
-        rng       = fig.x_range
-        if rng.bounds?
-            rng.start = rng.bounds[0]
-            rng.end   = rng.bounds[1]
+        fig    = @fig
+        rng    = fig.x_range
+        bounds = @_bounds(rng)
+        rng.start = bounds[0]
+        rng.end   = bounds[1]
 
         rng       = fig.y_range
-        if rng.bounds?
-            rng.start = rng.bounds[0]
-            rng.end   = rng.bounds[1]
+        bounds = @_bounds(rng)
+        rng.start = bounds[0]
+        rng.end   = bounds[1]
 
     dokeydown: (evt) ->
         if not (@fig?)
