@@ -61,7 +61,7 @@ export class DpxKeyedRow extends Row
                 @_curr = null
 
     _bounds: (rng) ->
-        if rng.bounds
+        if rng.bounds?
             return rng.bounds
         return [rng.reset_start, rng.reset_end]
 
