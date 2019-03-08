@@ -6,7 +6,8 @@ from   typing                  import Dict, Any
 
 import bokeh.models as _models
 from   bokeh.themes            import Theme
-from   bokeh.layouts           import layout
+from   bokeh.layouts           import layout, widgetbox
+from   bokeh.models            import Paragraph
 from   bokeh.document          import Document
 
 from   control.event           import EmitPolicy
@@ -15,8 +16,10 @@ from   control.action          import ActionDescriptor
 from   undo.control            import UndoController
 from   view.keypress           import DpxKeyEvent
 from   model.maintheme         import MainTheme
+from   utils.logconfig         import getLogger
 from   .configuration          import ConfigurationIO
 from   .scripting              import orders
+LOGS = getLogger(__name__)
 
 class DisplayController(DecentralizedController):
     "All temporary information related to one application run"
@@ -187,7 +190,12 @@ class BaseSuperController:
             getattr(sys.modules.get(mdl, None), 'document', lambda x: None)(doc)
 
         first = next(iter(self.topview.views), None)
-        roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
+        try:
+            roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
+        except Exception as exc: # pylint: disable=broad-except
+            LOGS.critical("Could not create GUI")
+            LOGS.exception("Could not create GUI")
+            roots = [widgetbox(Paragraph(text = f"[{type(exc)}] {exc}"))]
         if roots is None:
             return
 
