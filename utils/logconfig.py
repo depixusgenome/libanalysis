@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Sets-up the logging"
+from   typing   import Iterator, Tuple
 from   pathlib  import Path
 import logging
 import logging.config
@@ -77,3 +78,11 @@ def basicConfig(**kwargs):
         getLogger().removeHandler(hdl)
     getLogger().propagate = True
     return logging.basicConfig(**kwargs)
+
+def iterloggers() -> Iterator[Tuple[str, logging.Logger]]:
+    "iterate over loggers belonging to us"
+    yield from ( # type: ignore
+        i
+        for i in logging.getLogger().manager.loggerDict.items() # type: ignore
+        if i[0].startswith(LOGGER) and not isinstance(i[1], logging.PlaceHolder)
+    )

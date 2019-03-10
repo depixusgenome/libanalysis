@@ -27,11 +27,12 @@ with warnings.catch_warnings():
 from tornado.platform.asyncio       import AsyncIOMainLoop
 
 import app.configuration as _conf
-from utils.logconfig                import getLogger
+from utils.logconfig                import getLogger, iterloggers
 from view.static                    import ROUTE
 from view.keypress                  import DpxKeyEvent
 
 LOGS = getLogger()
+
 class ErrorHandler(logging.Handler):
     """
     A handler class which  deals with errors comming from the server
@@ -249,12 +250,15 @@ class _ManagedServerLoop:
         return server
 
     def __enter__(self):
-        self.server     = self.__buildserver(self.kwa)
-        self.__hdl      = ErrorHandler()
-        logging.getLogger().addHandler(self.__hdl)
         self.__warnings = warnings.catch_warnings()
         self.__warnings.__enter__()
         warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
+
+        self.__hdl      = ErrorHandler()
+        for _, j  in iterloggers():
+            j.addHandler(self.__hdl)
+
+        self.server     = self.__buildserver(self.kwa)
 
         time = process_time()
         haserr = [False]
@@ -274,6 +278,7 @@ class _ManagedServerLoop:
 
         self.server.start()
         self.loop.start()
+        assert len(self.__hdl.lst) == 0, "gui construction failed"
         assert not haserr[0], "could not start gui"
         return self
 
@@ -281,7 +286,10 @@ class _ManagedServerLoop:
         if self.server is not None:
             self.quit()
         self.__warnings.__exit__(*_)
-        logging.getLogger().removeHandler(self.__hdl)
+
+        for _1, j  in iterloggers():
+            j.removeHandler(self.__hdl)
+
         assert len(self.__hdl.lst) == 0, str(self.__hdl.lst)
 
     @staticmethod
