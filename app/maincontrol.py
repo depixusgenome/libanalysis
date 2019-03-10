@@ -137,19 +137,44 @@ class BaseSuperController:
         kwa.setdefault("title",  maps['theme']["appname"])
         kwa.setdefault("size",   maps['theme']['appsize'])
         return kwa
-
     def _open(self, viewcls, doc, kwa):
-        keys = DpxKeyEvent(self)
-        self.topview = viewcls(self, **kwa)
-        if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
-            self.topview.views[0].ismain(self)
+        class _HtmlLog:
+            def __init__(self, msg):
+                self.msg = msg
 
-        self._configio()
+            def __enter__(self):
+                pass
+
+            def __exit__(self, tpe, exc, trace):
+                if tpe is None:
+                    return True
+
+                LOGS.exception(self.msg, exc_info = (tpe, exc, trace))
+                if doc:
+                    doc.add_root(widgetbox(
+                        Paragraph(text = f"{self.msg}"),
+                        Paragraph(text = f"[{type(exc)}] {exc}")
+                    ))
+                return True
+
+        with _HtmlLog("Could not instantiate GUI"):
+            keys = DpxKeyEvent(self)
+            self.topview = viewcls(self, **kwa)
+            if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
+                self.topview.views[0].ismain(self)
+
+        with _HtmlLog("Could not configure"):
+            self._configio()
+
         if doc is None:
             return self
-        self._observe(keys)
-        self._bokeh(keys, doc)
-        self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
+
+        with _HtmlLog("Could not setup observers"):
+            self._observe(keys)
+
+        with _HtmlLog("Could not setup gui items"):
+            self._bokeh(keys, doc)
+            self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
         return self
 
     def _observe(self, keys):
@@ -190,12 +215,7 @@ class BaseSuperController:
             getattr(sys.modules.get(mdl, None), 'document', lambda x: None)(doc)
 
         first = next(iter(self.topview.views), None)
-        try:
-            roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
-        except Exception as exc: # pylint: disable=broad-except
-            LOGS.critical("Could not create GUI")
-            LOGS.exception("Could not create GUI")
-            roots = [widgetbox(Paragraph(text = f"[{type(exc)}] {exc}"))]
+        roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
         if roots is None:
             return
 
