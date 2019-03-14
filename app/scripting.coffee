@@ -12,7 +12,7 @@ export class DpxLoaded extends Model
     type:         "DpxLoaded"
     constructor : (attributes, options) ->
         super(attributes, options)
-        $(window).load(() => @done = 1)
+        $(() => @done = 1)
 
 
     @define { done: [p.Number, 0], resizedfig: [p.Instance, null] }

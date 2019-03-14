@@ -16,7 +16,7 @@ export class DpxTestLoaded extends Model
     type: "DpxTestLoaded"
     constructor : (attributes, options) ->
         super(attributes, options)
-        $(window).load(() => @done = 1)
+        $(() => @done = 1)
 
         self = @
 
