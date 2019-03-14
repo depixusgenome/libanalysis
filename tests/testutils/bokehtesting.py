@@ -142,8 +142,7 @@ class WidgetAccess:
     def __call__(self):
         if self._key is not None:
             raise KeyError("Could not find "+ self._key)
-        else:
-            return self._docs[0]
+        return self._docs[0]
 
 class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """

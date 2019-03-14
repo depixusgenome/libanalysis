@@ -156,14 +156,12 @@ class _Updater:
         if len(cpy) > 1:
             raise TypeError("__init__ takes at most a single positional"
                             +" argument as a copy constructor")
-        else:
-            cpy = cpy[0] if len(cpy) == 1 else None
+        cpy = cpy[0] if len(cpy) == 1 else None
 
         for name, field in self.attrs:
             if self.mandatory and cpy is None and deepcpy is None and name not in kwargs:
                 raise KeyError("Missing keyword '%s' in __init__" % name)
-            else:
-                setdefault(obj, name, kwargs, self.roots, cpy, deepcpy, field)
+            setdefault(obj, name, kwargs, self.roots, cpy, deepcpy, field)
 
         for name in self.update:
             update(getattr(obj, name), **kwargs)

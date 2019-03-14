@@ -105,8 +105,7 @@ class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
         except ValueError as exc:
             if i is not None:
                 raise ValueError(f'Error updating {i} = {j}') from exc
-            else:
-                raise ValueError(f'Error updating') from exc
+            raise ValueError(f'Error updating') from exc
         finally:
             self._state = old
 
