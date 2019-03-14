@@ -27,6 +27,7 @@ with warnings.catch_warnings():
 from tornado.platform.asyncio       import AsyncIOMainLoop
 
 import app.configuration as _conf
+from tests.testutils                import needsdisplay
 from utils.logconfig                import getLogger
 from view.static                    import ROUTE
 from view.keypress                  import DpxKeyEvent
@@ -143,7 +144,7 @@ class WidgetAccess:
         else:
             return self._docs[0]
 
-class _ManagedServerLoop:
+class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
     lets us use a current IOLoop with "with"
     and ensures the server unlistens
@@ -172,12 +173,14 @@ class _ManagedServerLoop:
 
     __warnings: Any
     __hdl: ErrorHandler
-    def __init__(self, mkpatch, kwa:dict) -> None:
+    def __init__(self, mkpatch, kwa:dict, filters) -> None:
         self.server: Server   = None
         self.view:   Any      = None
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
+        self.filters: list    = [] if filters is None else filters
+        self.filters.append(['ignore', '.*inspect.getargspec().*'])
 
     @staticmethod
     def __import(amod):
@@ -240,6 +243,7 @@ class _ManagedServerLoop:
             name = inspect.getouterframes(inspect.currentframe())[2].function
             addload("view.static", "modaldialog")
             _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
+            kwa.setdefault('port', 'random')
             try:
                 server = launch(app, **kwa)
             finally:
@@ -254,7 +258,15 @@ class _ManagedServerLoop:
         logging.getLogger().addHandler(self.__hdl)
         self.__warnings = warnings.catch_warnings()
         self.__warnings.__enter__()
-        warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
+        for i in self.filters:
+            if isinstance(i, dict):
+                warnings.filterwarnings('ignore', **i)
+            elif isinstance(i[-1], dict):
+                warnings.filterwarnings(*i[:-1], **i[-1])
+            elif isinstance(i[0], Exception) and len(i) == 2:
+                warnings.filterwarnings('ignore', category = i[0], message = i[1])
+            else:
+                warnings.filterwarnings(*i)
 
         time = process_time()
         haserr = [False]
@@ -420,22 +432,34 @@ class BokehAction:
             user_config_dir = lambda *_: tmp+"/"+_[-1]
         self.monkeypatch.setattr(_conf, 'appdirs', _Dummy)
 
-    def serve(self, app:Union[type, str], mod:str  = 'default', **kwa) -> _ManagedServerLoop:
+    def serve(
+            self,
+            app:Union[type, str],
+            mod:     str  = 'default',
+            filters: list = None,
+            **kwa
+    ) -> _ManagedServerLoop:
         "Returns a server managing context"
         kwa['_args_'] = app, mod, 'serve'
-        return _ManagedServerLoop(self.monkeypatch, kwa)
+        return _ManagedServerLoop(self.monkeypatch, kwa, filters)
 
-    def launch(self, app:Union[type, str], mod:str  = 'default', **kwa) -> _ManagedServerLoop:
+    def launch(
+            self,
+            app:Union[type, str],
+            mod:     str  = 'default',
+            filters: list = None,
+            **kwa
+    ) -> _ManagedServerLoop:
         "Returns a server managing context"
         kwa['_args_'] = app, mod, 'launch'
-        return _ManagedServerLoop(self.monkeypatch, kwa)
+        return _ManagedServerLoop(self.monkeypatch, kwa, filters)
 
     def setattr(self, *args, **kwargs):
         "apply monkey patch"
         self.monkeypatch.setattr(*args, **kwargs)
         return self
 
-@pytest.fixture()
+@pytest.fixture(params = [pytest.param("", marks = needsdisplay)])
 def bokehaction(monkeypatch):
     """
     Create a BokehAction fixture.

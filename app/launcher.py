@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Updates app manager so as to deal with controllers"
+from contextlib import closing
 from typing     import Dict, Any
 
 import sys
 import asyncio
+import socket
+import random
 
 from tornado.platform.asyncio   import AsyncIOMainLoop
 from bokeh.application          import Application
@@ -140,7 +143,17 @@ class _FunctionHandler(FunctionHandler):
         kwa.setdefault('generate_session_ids', True)
         kwa.setdefault('use_index',            True)
         kwa.setdefault('redirect_root',        True)
-        kwa['port'] = int(kwa.get('port', DEFAULT_SERVER_PORT))
+        if kwa.get('port', None) == 'random':
+            while True:
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    # pylint: disable=no-member
+                    sock.settimeout(2)
+                    kwa['port'] = random.randint(2000, 8000)
+                    if sock.connect_ex(("127.0.0.1", kwa['port'])) != 0:
+                        break
+        else:
+            kwa['port'] = int(kwa.get('port', DEFAULT_SERVER_PORT))
+
         kwa.pop('runtime', None)
         if isinstance(kwa.get('size', ()), list):
             kwa['size'] = tuple(kwa['size'])

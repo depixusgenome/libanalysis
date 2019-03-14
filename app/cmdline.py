@@ -8,7 +8,6 @@ from   functools import partial
 import logging
 import sys
 import subprocess
-import random
 import inspect
 import warnings
 
@@ -115,9 +114,6 @@ def _launch(filtr, view, app, gui, kwa):
 
     return getattr(launchmod, lfcn)(viewcls, **kwa)
 
-def _port(port):
-    return int(random.randint(5000, 8000)) if port == 'random' else int(port)
-
 CONFIGS = 'display', 'theme'
 def _config(lines):
     if len(lines) == 0:
@@ -195,7 +191,7 @@ def defaultinit(config, wall, raiseerr, nothreading):
 # pylint: disable=too-many-arguments
 def defaultmain(filtr, view, gui, port, defaultapp):
     "Launches an view"
-    kwargs = dict(port = _port(port), apponly = False)
+    kwargs = dict(port = port, apponly = False)
     server = _launch(filtr, view, defaultapp, gui, kwargs)
 
     if gui == 'default':
