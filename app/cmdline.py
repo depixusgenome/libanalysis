@@ -104,15 +104,14 @@ def _launch(filtr, view, app, gui, kwa):
 
     app            = filtr(app, viewcls)
     kwa['runtime'] = gui
-    lfcn           = 'launch' if gui.endswith('app') else 'serve'
     if '.' in app and 'A' <= app[app.rfind('.')+1] <= 'Z':
         mod  = app[:app.rfind('.')]
         attr = app[app.rfind('.')+1:]
         launchmod = getattr(__import__(mod, fromlist = [attr]), attr)
     else:
-        launchmod = __import__(app, fromlist = [lfcn])
+        launchmod = __import__(app, fromlist = ['launch'])
 
-    return getattr(launchmod, lfcn)(viewcls, **kwa)
+    return getattr(launchmod, 'launch')(viewcls, **kwa)
 
 CONFIGS = 'display', 'theme'
 def _config(lines):
@@ -196,12 +195,7 @@ def defaultmain(filtr, view, gui, port, defaultapp):
 
     if gui == 'default':
         gui = 'browser'
-    if gui.endswith('browser'):
-        server.io_loop.add_callback(lambda: server.show("/"))
 
-    log = lambda: LOGS.info(' http://%(address)s:%(port)s',
-                            {'port': kwargs['port'], 'address': 'localhost'})
-    server.io_loop.add_callback(log)
     server.run_until_shutdown()
     logging.shutdown()
 
