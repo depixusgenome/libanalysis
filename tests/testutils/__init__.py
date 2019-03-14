@@ -11,11 +11,8 @@ from    pytest  import mark
 import  numpy as np
 
 NO_DISPLAY      = not (sys.platform.startswith("win") or 'DISPLAY' in os.environ)
-integrationmark = mark.integration # pylint: disable=invalid-name
-needsdisplay    = mark.skipif( # pylint: disable=invalid-name
-    NO_DISPLAY,
-    reason = "no display on this platform"
-)
+integrationmark = mark.integration  # pylint: disable=invalid-name
+needsdisplay    = mark.needsdisplay # pylint: disable=invalid-name
 
 warnings.filterwarnings('error', category = FutureWarning)
 warnings.filterwarnings('error', category = DeprecationWarning)

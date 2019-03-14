@@ -3,6 +3,7 @@
 "Utils for testing views"
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
+import os
 import tempfile
 import warnings
 import inspect
@@ -252,10 +253,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.__patchserver(server)
         return server
 
-    def __enter__(self):
-        self.server     = self.__buildserver(self.kwa)
-        self.__hdl      = ErrorHandler()
-        logging.getLogger().addHandler(self.__hdl)
+    def __set_warnings(self):
         self.__warnings = warnings.catch_warnings()
         self.__warnings.__enter__()
         for i in self.filters:
@@ -268,9 +266,24 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             else:
                 warnings.filterwarnings(*i)
 
-        time = process_time()
+    def __set_display(self):
+        if 'DISPLAY' not in os.environ:
+            import webbrowser
+            for i in ('Mozilla', 'Chrome'):
+                cls = getattr(webbrowser, i)
+                self.monkeypatch.setattr(
+                    cls,
+                    'remote_args',
+                    ['--headless']+cls.remote_args
+                )
+
+    def __set_handler(self):
+        self.__hdl      = ErrorHandler()
+        logging.getLogger().addHandler(self.__hdl)
+
+    def __start(self):
         haserr = [False]
-        def _start():
+        def _start(time = process_time()):
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
@@ -287,6 +300,13 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.server.start()
         self.loop.start()
         assert not haserr[0], "could not start gui"
+
+    def __enter__(self):
+        self.server     = self.__buildserver(self.kwa)
+        self.__set_handler()
+        self.__set_warnings()
+        self.__set_display()
+        self.__start()
         return self
 
     def __exit__(self, *_):
