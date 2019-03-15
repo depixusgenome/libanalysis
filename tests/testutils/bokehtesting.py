@@ -318,7 +318,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     @staticmethod
     def path(path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
         "returns the path to testing data"
-        return __import__("testingcore").path(path)
+        raise NotImplementedError()
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
         "send command to the view"
