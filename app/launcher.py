@@ -72,7 +72,7 @@ class _FunctionHandler(FunctionHandler):
         else:
             server = cls.serveapplication(view, **kwa.pop('server', {}), port = port)
 
-        if kwa.get('runtime', '').endswith('app'):
+        if kwa.get('runtime', 'app').endswith('app'):
             cls.__monkeypatch_flexx(server)
             view.MainControl.FLEXXAPP = _flexxlaunch('http://localhost:{}/'.format(port),
                                                      **kwa)

@@ -8,10 +8,12 @@ import tempfile
 import warnings
 import inspect
 import logging
+import webbrowser
 
-warnings.filterwarnings('ignore',
-                        category = DeprecationWarning,
-                        message  = '.*elementwise == comparison failed.*')
+HEADLESS = (
+    os.environ.get("DPX_TEST_HEADLESS", False)
+    or 'DISPLAY' not in os.environ
+)
 warnings.filterwarnings('ignore', category = DeprecationWarning,
                         message  = ".*Using or importing the ABCs from 'collections'.*")
 
@@ -26,6 +28,7 @@ with warnings.catch_warnings():
 
 # pylint: disable=wrong-import-position
 from tornado.platform.asyncio       import AsyncIOMainLoop
+import webruntime
 
 import app.configuration as _conf
 from tests.testutils                import needsdisplay
@@ -179,8 +182,13 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
+        self.headless         = kwa.pop('headless', HEADLESS)
         self.filters: list    = [] if filters is None else filters
-        self.filters.append(['ignore', '.*inspect.getargspec().*'])
+        self.filters.extend((
+            ('ignore', '.*inspect.getargspec().*'),
+            (RuntimeWarning, ".*coroutine 'HTTPServer.close_all_connections'.*"),
+            (DeprecationWarning, '.*elementwise == comparison failed.*'),
+        ))
 
     @staticmethod
     def __import(amod):
@@ -244,6 +252,8 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             addload("view.static", "modaldialog")
             _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
             kwa.setdefault('port', 'random')
+            if self.headless:
+                kwa.pop('runtime', None)
             try:
                 server = launch(app, **kwa)
             finally:
@@ -260,21 +270,36 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
                 warnings.filterwarnings('ignore', **i)
             elif isinstance(i[-1], dict):
                 warnings.filterwarnings(*i[:-1], **i[-1])
-            elif isinstance(i[0], Exception) and len(i) == 2:
+            elif (
+                    isinstance(i[0], type)
+                    and issubclass(i[0], Exception)
+                    and len(i) == 2
+            ):
                 warnings.filterwarnings('ignore', category = i[0], message = i[1])
             else:
                 warnings.filterwarnings(*i)
 
     def __set_display(self):
-        if 'DISPLAY' not in os.environ:
-            import webbrowser
-            for i in ('Mozilla', 'Chrome'):
-                cls = getattr(webbrowser, i)
-                self.monkeypatch.setattr(
-                    cls,
-                    'remote_args',
-                    ['--headless']+cls.remote_args
-                )
+        if not self.headless:
+            return
+
+        for i in ('Mozilla', 'Chrome'):
+            cls = getattr(webbrowser, i)
+            self.monkeypatch.setattr(
+                cls,
+                'remote_args',
+                ['--headless']+cls.remote_args
+            )
+        old = getattr(webruntime.BaseRuntime, '_start_subprocess')
+        def _start_subprocess(self, cmd, shell=False, **env):
+            return old(self, cmd+['--headless'], shell, **env)
+        self.monkeypatch.setattr(
+            webruntime.BaseRuntime,
+            '_start_subprocess',
+            _start_subprocess
+        )
+
+
 
     def __set_handler(self):
         self.__hdl      = ErrorHandler()
@@ -301,10 +326,10 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         assert not haserr[0], "could not start gui"
 
     def __enter__(self):
-        self.server     = self.__buildserver(self.kwa)
+        self.__set_display()
         self.__set_handler()
         self.__set_warnings()
-        self.__set_display()
+        self.server = self.__buildserver(self.kwa)
         self.__start()
         return self
 
