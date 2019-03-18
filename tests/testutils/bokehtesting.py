@@ -469,37 +469,39 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 class BokehAction:
     "All things to make gui testing easy"
     def __init__(self, mkpatch):
-        if mkpatch is None:
-            from _pytest.monkeypatch import MonkeyPatch
-            warnings.warn("Unsafe call to MonkeyPatch. Use only for manual debugging")
-            mkpatch = MonkeyPatch()
+        if not mkpatch:
+            from . import getmonkey
+            mkpatch = getmonkey()
+
         self.monkeypatch = mkpatch
         tmp = tempfile.mktemp()+"_test"
         class _Dummy:
             user_config_dir = lambda *_: tmp+"/"+_[-1]
         self.monkeypatch.setattr(_conf, 'appdirs', _Dummy)
+        self.server: _ManagedServerLoop = None
 
-    def serve(
+    def start( # pylint: disable=too-many-arguments
             self,
             app:Union[type, str],
             mod:     str  = 'default',
             filters: list = None,
+            launch: bool  = True,
+            keep:   bool  = True,
             **kwa
     ) -> _ManagedServerLoop:
         "Returns a server managing context"
-        kwa['_args_'] = app, mod, 'serve'
-        return _ManagedServerLoop(self.monkeypatch, kwa, filters)
+        kwa['_args_'] = app, mod, 'launch' if launch else 'serve'
+        server        = _ManagedServerLoop(self.monkeypatch, kwa, filters)
+        if keep:
+            self.server = server
+            self.server.__enter__()
+        return server
 
-    def launch(
-            self,
-            app:Union[type, str],
-            mod:     str  = 'default',
-            filters: list = None,
-            **kwa
-    ) -> _ManagedServerLoop:
-        "Returns a server managing context"
-        kwa['_args_'] = app, mod, 'launch'
-        return _ManagedServerLoop(self.monkeypatch, kwa, filters)
+    def close(self):
+        "stop server"
+        act, self.server = self.server, None
+        if act is not None:
+            act.__exit__(None, None, None)
 
     def setattr(self, *args, **kwargs):
         "apply monkey patch"
@@ -522,4 +524,7 @@ def bokehaction(monkeypatch):
     be accessed directly, for example BokehAction.view._ctrl  can be accessed
     through BokehAction.ctrl.
     """
-    return BokehAction(monkeypatch)
+    act = BokehAction(monkeypatch)
+    yield act
+    act.server.wait()
+    act.close()
