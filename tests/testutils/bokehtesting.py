@@ -11,11 +11,14 @@ import logging
 import webbrowser
 
 HEADLESS = (
-    os.environ.get("DPX_TEST_HEADLESS", False)
+    os.environ.get("DPX_TEST_HEADLESS", '').lower().strip() in ('true', '1', 'yes')
     or 'DISPLAY' not in os.environ
 )
-warnings.filterwarnings('ignore', category = DeprecationWarning,
-                        message  = ".*Using or importing the ABCs from 'collections'.*")
+warnings.filterwarnings(
+    'ignore',
+    category = DeprecationWarning,
+    message  = ".*Using or importing the ABCs from 'collections'.*"
+)
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category = DeprecationWarning)
