@@ -10,10 +10,6 @@ import inspect
 import logging
 import webbrowser
 
-HEADLESS = (
-    os.environ.get("DPX_TEST_HEADLESS", '').lower().strip() in ('true', '1', 'yes')
-    or 'DISPLAY' not in os.environ
-)
 warnings.filterwarnings(
     'ignore',
     category = DeprecationWarning,
@@ -185,7 +181,11 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
-        self.headless         = kwa.pop('headless', HEADLESS)
+        self.headless         = (
+            os.environ.get("DPX_TEST_HEADLESS", '').lower().strip() in ('true', '1', 'yes')
+            or 'DISPLAY' not in os.environ
+        )
+        self.headless         = kwa.pop('headless', self.headless)
         self.filters: list    = [] if filters is None else filters
         self.filters.extend((
             ('ignore', '.*inspect.getargspec().*'),
