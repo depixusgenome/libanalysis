@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Different file dialogs."
+import os
 import sys
 from itertools          import repeat
 from pathlib            import Path
@@ -142,7 +143,10 @@ class BaseFileDialog:
 
     @staticmethod
     def _calltk(info, dialog):
-        root = _Tk()
+        root = (
+            _Tk() if sys.platform.startswith("win") else
+            _Tk(os.environ.get("DISPLAY", ":0"))
+        )
         root.withdraw()
         root.wm_attributes("-topmost",1)
         rets = dialog(**info,parent=root)
