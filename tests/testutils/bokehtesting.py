@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Utils for testing views"
+from   importlib import import_module
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
 import os
@@ -343,9 +344,14 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         logging.getLogger().removeHandler(self.__hdl)
         assert len(self.__hdl.lst) == 0, str(self.__hdl.lst)
 
-    @staticmethod
-    def path(path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
+    PATH = None
+    @classmethod
+    def path(cls, path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
         "returns the path to testing data"
+        pathfcn = cls.PATH
+        if pathfcn is not None:
+            LOGS.debug("Test is opening: %s", path)
+            return pathfcn(path) # pylint: disable=not-callable
         raise NotImplementedError()
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
@@ -461,10 +467,18 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         "Returns something to access web elements"
         return WidgetAccess(self.doc)
 
+    STORE = None
     @property
     def savedconfig(self):
         "return the saved config"
-        raise NotImplementedError()
+        if self.STORE is None:
+            raise NotImplementedError()
+        taskstore = import_module(self.STORE)
+        path      = (
+            _conf.ConfigurationIO(self.ctrl)
+            .configpath(next(taskstore.iterversions('config')))
+        )
+        return taskstore.load(path)
 
 class BokehAction:
     "All things to make gui testing easy"
