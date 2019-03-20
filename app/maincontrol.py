@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 "The main controller"
 import sys
+from   contextlib              import contextmanager
 from   typing                  import Dict, Any
 
 import bokeh.models as _models
@@ -139,17 +140,37 @@ class BaseSuperController:
         return kwa
 
     def _open(self, viewcls, doc, kwa):
-        keys = DpxKeyEvent(self)
-        self.topview = viewcls(self, **kwa)
-        if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
-            self.topview.views[0].ismain(self)
+        @contextmanager
+        def _test(msg):
+            try:
+                yield
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.critical(msg)
+                LOGS.exception(msg)
+                if doc:
+                    doc.add_root(widgetbox(Paragraph(text = f"[{type(exc)}] {exc}")))
+                raise
 
-        self._configio()
-        if doc is None:
-            return self
-        self._observe(keys)
-        self._bokeh(keys, doc)
-        self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
+        keys = None
+        try:
+            with _test("Could not create GUI instance"):
+                keys         = DpxKeyEvent(self)
+                self.topview = viewcls(self, **kwa)
+                if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
+                    self.topview.views[0].ismain(self)
+
+            with _test("Could not configure GUI"):
+                self._configio()
+
+            if doc is not None:
+                with _test("Could not setup observers"):
+                    self._observe(keys)
+                with _test("Could not create GUI"):
+                    self._bokeh(keys, doc)
+                with _test("Could not handle applicationstarted event"):
+                    self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
+        except: # pylint: disable=bare-except
+            pass
         return self
 
     def _observe(self, keys):
@@ -190,12 +211,7 @@ class BaseSuperController:
             getattr(sys.modules.get(mdl, None), 'document', lambda x: None)(doc)
 
         first = next(iter(self.topview.views), None)
-        try:
-            roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
-        except Exception as exc: # pylint: disable=broad-except
-            LOGS.critical("Could not create GUI")
-            LOGS.exception("Could not create GUI")
-            roots = [widgetbox(Paragraph(text = f"[{type(exc)}] {exc}"))]
+        roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
         if roots is None:
             return
 
