@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Updates app manager so as to deal with controllers"
+from contextlib import closing
 from typing     import Dict, Any
 
 import sys
 import asyncio
+import socket
+import random
 
 from tornado.platform.asyncio   import AsyncIOMainLoop
 from bokeh.application          import Application
@@ -47,8 +50,8 @@ class _FunctionHandler(FunctionHandler):
         "Launches a bokeh server"
         # monkeypatch the js production: it's been done once & saved during compilation
         cls.__monkeypatch_bokeh(view)
+        cls.__setport(kwa)
         cls.__server_kwargs(kwa)
-
         fcn                = cls(view)
         server             = Server(Application(fcn), **kwa)
         fcn.server         = server
@@ -60,7 +63,7 @@ class _FunctionHandler(FunctionHandler):
     def launchflexx(cls, view, **kwa):
         "Launches a bokeh server"
         from webruntime           import launch as _flexxlaunch
-        port = kwa.get('port', str(DEFAULT_SERVER_PORT))
+        port = cls.__setport(kwa)
         if isinstance(kwa.get('size', ()), list):
             kwa['size'] = tuple(kwa['size'])
 
@@ -69,9 +72,13 @@ class _FunctionHandler(FunctionHandler):
         else:
             server = cls.serveapplication(view, **kwa.pop('server', {}), port = port)
 
-        cls.__monkeypatch_flexx(server)
-        view.MainControl.FLEXXAPP = _flexxlaunch('http://localhost:{}/'.format(port),
-                                                 **kwa)
+        if kwa.get('runtime', 'app').endswith('app'):
+            cls.__monkeypatch_flexx(server)
+            view.MainControl.FLEXXAPP = _flexxlaunch('http://localhost:{}/'.format(port),
+                                                     **kwa)
+        elif kwa.get('runtime', '') != 'none':
+            server.io_loop.add_callback(lambda: server.show("/"))
+
         return server
 
     @staticmethod
@@ -140,14 +147,29 @@ class _FunctionHandler(FunctionHandler):
         kwa.setdefault('generate_session_ids', True)
         kwa.setdefault('use_index',            True)
         kwa.setdefault('redirect_root',        True)
-        kwa['port'] = int(kwa.get('port', DEFAULT_SERVER_PORT))
         kwa.pop('runtime', None)
         if isinstance(kwa.get('size', ()), list):
             kwa['size'] = tuple(kwa['size'])
         LOGS.debug("dynamic loads: %s", orders().dynloads())
+        LOGS.info(' http://localhost:%s', kwa['port'])
         for mdl in orders().dynloads():
             getattr(sys.modules.get(mdl, None), 'server', lambda x: None)(kwa)
         return kwa
+
+    @staticmethod
+    def __setport(kwa):
+        if kwa.get('port', None) == 'random':
+            while True:
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    # pylint: disable=no-member
+                    sock.settimeout(2)
+                    kwa['port'] = random.randint(2000, 8000)
+                    if sock.connect_ex(("127.0.0.1", kwa['port'])) != 0:
+                        break
+        else:
+            kwa['port'] = int(kwa.get('port', DEFAULT_SERVER_PORT))
+        return kwa['port']
+
 
     def __onloaded(self):
         if self.__gotone is False:

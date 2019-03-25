@@ -30,11 +30,12 @@ def route(*names:str):
 
 class StaticHandler(RequestHandler):    # pylint: disable=abstract-method
     'Implements a custom Tornado handler for autoloading css'
-    def initialize(self, *args, **kw):  # pylint: disable=arguments-differ
-        pass
+    def initialize(self, *_, **__):  # pylint: disable=arguments-differ
+        "init"
 
     @gen.coroutine
-    def get(self, *args, **kwargs):
+    def get(self, *_, **__):
+        "getter"
         self.set_header("Content-Type", 'text/css')
         self.write(".dpx-peaksplot-widget { width: 520px;}\n"
                    ".dpx-peaksplot-canvas { width: auto;}\n")

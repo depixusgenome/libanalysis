@@ -6,14 +6,20 @@
 #include <boost/preprocessor/seq.hpp>
 #include <boost/preprocessor/seq/cat.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
-#if (__GNUC__ == 8 && __GNUC_MINOR__ == 2)
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wcast-function-type"
-# include <pybind11/pybind11.h>
-# pragma GCC diagnostic pop
-#else
-# include <pybind11/pybind11.h>
+#ifdef __GNUC__
+# ifdef __clang__
+#   if (__clang_major__ == 6)
+#     pragma GCC diagnostic push
+#     pragma GCC diagnostic ignored "-Wmissing-noreturn"
+#   endif
+# else
+#   if (__GNUC__ == 8 && __GNUC_MINOR__ <= 3)
+#     pragma GCC diagnostic push
+#     pragma GCC diagnostic ignored "-Wcast-function-type"
+#   endif
+# endif
 #endif
+#include <pybind11/pybind11.h>
 #ifndef PYBIND11_HAS_VARIANT
 # define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
 #endif
@@ -25,6 +31,18 @@
 #endif
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+#ifdef __GNUC__
+# ifdef __clang__
+#   if (__clang_major__ == 6)
+#     pragma GCC diagnostic pop
+#   endif
+# else
+#   if (__GNUC__ == 8 && __GNUC_MINOR__ <= 3)
+#     pragma GCC diagnostic pop
+#   endif
+# endif
+#endif
+
 
 #define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
 #define DPX_PY2C(CLS, ATTRS) \

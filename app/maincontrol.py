@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 "The main controller"
 import sys
+from   contextlib              import contextmanager
 from   typing                  import Dict, Any
 
 import bokeh.models as _models
@@ -138,43 +139,37 @@ class BaseSuperController:
         kwa.setdefault("size",   maps['theme']['appsize'])
         return kwa
     def _open(self, viewcls, doc, kwa):
-        class _HtmlLog:
-            def __init__(self, msg):
-                self.msg = msg
-
-            def __enter__(self):
-                pass
-
-            def __exit__(self, tpe, exc, trace):
-                if tpe is None:
-                    return True
-
-                LOGS.exception(self.msg, exc_info = (tpe, exc, trace))
+        @contextmanager
+        def _test(msg):
+            try:
+                yield
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.critical(msg)
+                LOGS.exception(msg)
                 if doc:
-                    doc.add_root(widgetbox(
-                        Paragraph(text = f"{self.msg}"),
-                        Paragraph(text = f"[{type(exc)}] {exc}")
-                    ))
-                return True
+                    doc.add_root(widgetbox(Paragraph(text = f"[{type(exc)}] {exc}")))
+                raise
 
-        with _HtmlLog("Could not instantiate GUI"):
-            keys = DpxKeyEvent(self)
-            self.topview = viewcls(self, **kwa)
-            if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
-                self.topview.views[0].ismain(self)
+        keys = None
+        try:
+            with _test("Could not create GUI instance"):
+                keys         = DpxKeyEvent(self)
+                self.topview = viewcls(self, **kwa)
+                if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
+                    self.topview.views[0].ismain(self)
 
-        with _HtmlLog("Could not configure"):
-            self._configio()
+            with _test("Could not configure GUI"):
+                self._configio()
 
-        if doc is None:
-            return self
-
-        with _HtmlLog("Could not setup observers"):
-            self._observe(keys)
-
-        with _HtmlLog("Could not setup gui items"):
-            self._bokeh(keys, doc)
-            self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
+            if doc is not None:
+                with _test("Could not setup observers"):
+                    self._observe(keys)
+                with _test("Could not create GUI"):
+                    self._bokeh(keys, doc)
+                with _test("Could not handle applicationstarted event"):
+                    self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
+        except: # pylint: disable=bare-except
+            pass
         return self
 
     def _observe(self, keys):

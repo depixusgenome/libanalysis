@@ -8,7 +8,6 @@ from   functools import partial
 import logging
 import sys
 import subprocess
-import random
 import inspect
 import warnings
 
@@ -105,18 +104,14 @@ def _launch(filtr, view, app, gui, kwa):
 
     app            = filtr(app, viewcls)
     kwa['runtime'] = gui
-    lfcn           = 'launch' if gui.endswith('app') else 'serve'
     if '.' in app and 'A' <= app[app.rfind('.')+1] <= 'Z':
         mod  = app[:app.rfind('.')]
         attr = app[app.rfind('.')+1:]
         launchmod = getattr(__import__(mod, fromlist = [attr]), attr)
     else:
-        launchmod = __import__(app, fromlist = [lfcn])
+        launchmod = __import__(app, fromlist = ['launch'])
 
-    return getattr(launchmod, lfcn)(viewcls, **kwa)
-
-def _port(port):
-    return int(random.randint(5000, 8000)) if port == 'random' else int(port)
+    return getattr(launchmod, 'launch')(viewcls, **kwa)
 
 CONFIGS = 'display', 'theme'
 def _config(lines):
@@ -195,17 +190,12 @@ def defaultinit(config, wall, raiseerr, nothreading):
 # pylint: disable=too-many-arguments
 def defaultmain(filtr, view, gui, port, defaultapp):
     "Launches an view"
-    kwargs = dict(port = _port(port), apponly = False)
+    kwargs = dict(port = port, apponly = False)
     server = _launch(filtr, view, defaultapp, gui, kwargs)
 
     if gui == 'default':
         gui = 'browser'
-    if gui.endswith('browser'):
-        server.io_loop.add_callback(lambda: server.show("/"))
 
-    log = lambda: LOGS.info(' http://%(address)s:%(port)s',
-                            {'port': kwargs['port'], 'address': 'localhost'})
-    server.io_loop.add_callback(log)
     server.run_until_shutdown()
     logging.shutdown()
 

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Utils for testing views"
+from   importlib import import_module
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
+import os
 import tempfile
 import warnings
 import inspect
 import logging
+import webbrowser
 
-warnings.filterwarnings('ignore',
-                        category = DeprecationWarning,
-                        message  = '.*elementwise == comparison failed.*')
-warnings.filterwarnings('ignore', category = DeprecationWarning,
-                        message  = ".*Using or importing the ABCs from 'collections'.*")
+warnings.filterwarnings(
+    'ignore',
+    category = DeprecationWarning,
+    message  = ".*Using or importing the ABCs from 'collections'.*"
+)
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category = DeprecationWarning)
@@ -25,8 +28,10 @@ with warnings.catch_warnings():
 
 # pylint: disable=wrong-import-position
 from tornado.platform.asyncio       import AsyncIOMainLoop
+import webruntime
 
 import app.configuration as _conf
+from tests.testutils                import needsdisplay
 from utils.logconfig                import getLogger, iterloggers
 from view.static                    import ROUTE
 from view.keypress                  import DpxKeyEvent
@@ -141,10 +146,9 @@ class WidgetAccess:
     def __call__(self):
         if self._key is not None:
             raise KeyError("Could not find "+ self._key)
-        else:
-            return self._docs[0]
+        return self._docs[0]
 
-class _ManagedServerLoop:
+class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
     lets us use a current IOLoop with "with"
     and ensures the server unlistens
@@ -173,12 +177,23 @@ class _ManagedServerLoop:
 
     __warnings: Any
     __hdl: ErrorHandler
-    def __init__(self, mkpatch, kwa:dict) -> None:
+    def __init__(self, mkpatch, kwa:dict, filters) -> None:
         self.server: Server   = None
         self.view:   Any      = None
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
+        self.headless         = (
+            os.environ.get("DPX_TEST_HEADLESS", '').lower().strip() in ('true', '1', 'yes')
+            or 'DISPLAY' not in os.environ
+        )
+        self.headless         = kwa.pop('headless', self.headless)
+        self.filters: list    = [] if filters is None else filters
+        self.filters.extend((
+            ('ignore', '.*inspect.getargspec().*'),
+            (RuntimeWarning, ".*coroutine 'HTTPServer.close_all_connections'.*"),
+            (DeprecationWarning, '.*elementwise == comparison failed.*'),
+        ))
 
     @staticmethod
     def __import(amod):
@@ -241,6 +256,9 @@ class _ManagedServerLoop:
             name = inspect.getouterframes(inspect.currentframe())[2].function
             addload("view.static", "modaldialog")
             _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
+            kwa.setdefault('port', 'random')
+            if self.headless:
+                kwa.pop('runtime', None)
             try:
                 server = launch(app, **kwa)
             finally:
@@ -249,20 +267,50 @@ class _ManagedServerLoop:
         self.__patchserver(server)
         return server
 
-    def __enter__(self):
+    def __set_warnings(self):
         self.__warnings = warnings.catch_warnings()
         self.__warnings.__enter__()
-        warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
+        for i in self.filters:
+            if isinstance(i, dict):
+                warnings.filterwarnings('ignore', **i)
+            elif isinstance(i[-1], dict):
+                warnings.filterwarnings(*i[:-1], **i[-1])
+            elif (
+                    isinstance(i[0], type)
+                    and issubclass(i[0], Exception)
+                    and len(i) == 2
+            ):
+                warnings.filterwarnings('ignore', category = i[0], message = i[1])
+            else:
+                warnings.filterwarnings(*i)
 
+    def __set_display(self):
+        if not self.headless:
+            return
+
+        for i in ('Mozilla', 'Chrome'):
+            cls = getattr(webbrowser, i)
+            self.monkeypatch.setattr(
+                cls,
+                'remote_args',
+                ['--headless']+cls.remote_args
+            )
+        old = getattr(webruntime.BaseRuntime, '_start_subprocess')
+        def _start_subprocess(self, cmd, shell=False, **env):
+            return old(self, cmd+['--headless'], shell, **env)
+        self.monkeypatch.setattr(
+            webruntime.BaseRuntime,
+            '_start_subprocess',
+            _start_subprocess
+        )
+
+    def __set_handler(self):
         self.__hdl      = ErrorHandler()
-        for _, j  in iterloggers():
-            j.addHandler(self.__hdl)
+        logging.getLogger().addHandler(self.__hdl)
 
-        self.server     = self.__buildserver(self.kwa)
-
-        time = process_time()
+    def __start(self):
         haserr = [False]
-        def _start():
+        def _start(time = process_time()):
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
@@ -280,6 +328,13 @@ class _ManagedServerLoop:
         self.loop.start()
         assert len(self.__hdl.lst) == 0, "gui construction failed"
         assert not haserr[0], "could not start gui"
+
+    def __enter__(self):
+        self.__set_display()
+        self.__set_handler()
+        self.__set_warnings()
+        self.server = self.__buildserver(self.kwa)
+        self.__start()
         return self
 
     def __exit__(self, *_):
@@ -292,10 +347,15 @@ class _ManagedServerLoop:
 
         assert len(self.__hdl.lst) == 0, str(self.__hdl.lst)
 
-    @staticmethod
-    def path(path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
+    PATH = None
+    @classmethod
+    def path(cls, path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
         "returns the path to testing data"
-        return __import__("testingcore").path(path)
+        pathfcn = cls.PATH
+        if pathfcn is not None:
+            LOGS.debug("Test is opening: %s", path)
+            return pathfcn(path) # pylint: disable=not-callable
+        raise NotImplementedError()
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
         "send command to the view"
@@ -410,40 +470,62 @@ class _ManagedServerLoop:
         "Returns something to access web elements"
         return WidgetAccess(self.doc)
 
+    STORE = None
     @property
     def savedconfig(self):
         "return the saved config"
-        raise NotImplementedError()
+        if self.STORE is None:
+            raise NotImplementedError()
+        taskstore = import_module(self.STORE)
+        path      = (
+            _conf.ConfigurationIO(self.ctrl)
+            .configpath(next(taskstore.iterversions('config')))
+        )
+        return taskstore.load(path)
 
 class BokehAction:
     "All things to make gui testing easy"
     def __init__(self, mkpatch):
-        if mkpatch is None:
-            from _pytest.monkeypatch import MonkeyPatch
-            warnings.warn("Unsafe call to MonkeyPatch. Use only for manual debugging")
-            mkpatch = MonkeyPatch()
+        if not mkpatch:
+            from . import getmonkey
+            mkpatch = getmonkey()
+
         self.monkeypatch = mkpatch
         tmp = tempfile.mktemp()+"_test"
         class _Dummy:
             user_config_dir = lambda *_: tmp+"/"+_[-1]
         self.monkeypatch.setattr(_conf, 'appdirs', _Dummy)
+        self.server: _ManagedServerLoop = None
 
-    def serve(self, app:Union[type, str], mod:str  = 'default', **kwa) -> _ManagedServerLoop:
+    def start( # pylint: disable=too-many-arguments
+            self,
+            app:Union[type, str],
+            mod:     str  = 'default',
+            filters: list = None,
+            launch: bool  = True,
+            keep:   bool  = True,
+            **kwa
+    ) -> _ManagedServerLoop:
         "Returns a server managing context"
-        kwa['_args_'] = app, mod, 'serve'
-        return _ManagedServerLoop(self.monkeypatch, kwa)
+        kwa['_args_'] = app, mod, 'launch' if launch else 'serve'
+        server        = _ManagedServerLoop(self.monkeypatch, kwa, filters)
+        if keep:
+            self.server = server
+            self.server.__enter__()
+        return server
 
-    def launch(self, app:Union[type, str], mod:str  = 'default', **kwa) -> _ManagedServerLoop:
-        "Returns a server managing context"
-        kwa['_args_'] = app, mod, 'launch'
-        return _ManagedServerLoop(self.monkeypatch, kwa)
+    def close(self):
+        "stop server"
+        act, self.server = self.server, None
+        if act is not None:
+            act.__exit__(None, None, None)
 
     def setattr(self, *args, **kwargs):
         "apply monkey patch"
         self.monkeypatch.setattr(*args, **kwargs)
         return self
 
-@pytest.fixture()
+@pytest.fixture(params = [pytest.param("", marks = needsdisplay)])
 def bokehaction(monkeypatch):
     """
     Create a BokehAction fixture.
@@ -459,4 +541,7 @@ def bokehaction(monkeypatch):
     be accessed directly, for example BokehAction.view._ctrl  can be accessed
     through BokehAction.ctrl.
     """
-    return BokehAction(monkeypatch)
+    act = BokehAction(monkeypatch)
+    yield act
+    act.server.wait()
+    act.close()

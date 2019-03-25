@@ -16,7 +16,7 @@ export class DpxTestLoaded extends Model
     type: "DpxTestLoaded"
     constructor : (attributes, options) ->
         super(attributes, options)
-        $((e) => @done = 1)
+        $(() => @done = 1)
 
         self = @
 
@@ -48,26 +48,31 @@ export class DpxTestLoaded extends Model
 
         return evt
 
+    _model: () ->
+        return Bokeh.documents[0].get_model_by_id(@modelid)
+
     _press: () ->
         console.debug("pressed key: ", @event.ctrl, @event.key)
-        if @model?
-            @model.dokeydown?(@_create_evt('keydown'))
-            @model.dokeyup?(@_create_evt('keyup'))
+        mdl = @_model()
+        if mdl?
+            mdl.dokeydown?(@_create_evt('keydown'))
+            mdl.dokeyup?(@_create_evt('keyup'))
         else
             console.log("pressed key but there's no model")
 
     _change: () ->
         console.debug("changed attribute: ", @attrs, @value)
-        if @model?
-            mdl = @model
+        root = @_model()
+        if root?
+            mdl = root
             for i in @attrs
                 mdl = mdl[i]
 
             mdl[@attr] = @value
             if @attrs.length == 0
-                @model.properties[@attr].change.emit()
+                root.properties[@attr].change.emit()
             else
-                @model.properties[@attrs[0]].change.emit()
+                root.properties[@attrs[0]].change.emit()
         else
             console.log("changed key but there's no model")
 
@@ -75,7 +80,7 @@ export class DpxTestLoaded extends Model
         done:  [p.Number, 0]
         event: [p.Any,   {}]
         event_cnt: [p.Int, 0]
-        model: [p.Any,   {}]
+        modelid: [p.String, '']
         attrs: [p.Array, []]
         attr : [p.String, '']
         value: [p.Any,   {}]

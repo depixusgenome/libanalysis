@@ -2,10 +2,17 @@
 # -*- coding: utf-8 -*-
 """ access to files """
 from    typing import Union, Sequence, Optional, Dict, Any, cast
+import  os
+import  sys
 import  json
 import  warnings
 from    pathlib import Path
+from    pytest  import mark
 import  numpy as np
+
+NO_DISPLAY      = not (sys.platform.startswith("win") or 'DISPLAY' in os.environ)
+integrationmark = mark.integration  # pylint: disable=invalid-name
+needsdisplay    = mark.needsdisplay # pylint: disable=invalid-name
 
 warnings.filterwarnings('error', category = FutureWarning)
 warnings.filterwarnings('error', category = DeprecationWarning)
