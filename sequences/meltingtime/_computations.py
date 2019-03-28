@@ -131,7 +131,16 @@ class Strands:
         nds = max(0, self.dsend - max(nzipped+1, self.dsbegin))
         return (nds*(nds-1))//2+1
 
-_OFF: int = cast(int, np.iinfo('i4').max)
+_JOIN_DT: np.dtype = np.dtype([
+    ('states',  np.dtype([('iclose',  'i4'), ('iopen',    'i4')])),
+    ('base',     'i4'),
+    ('islast',   'i1'),
+    ('canclose', 'bool'),
+    ('canopen',  'bool'),
+    ('_',        'i1')
+])
+
+_OFF:     int      = cast(int, np.iinfo('i4').max)
 class StatesTransitions(BaseComputations):
     "compute results for complex states"
     def __init__(self, hpin, *oligos, chpin = None, **_):
@@ -186,26 +195,31 @@ class StatesTransitions(BaseComputations):
         masked, states = self.__masked_and_states(masked, states)
         trans          = np.zeros((len(states),)*2, dtype = self.dtype)
         rco            = self.__rco()
-        hashp          = self.hpin not in masked
-        maxs           = self.__maxs
+        if self.hpin not in masked:
+            ioli = 2
+            roo  = self.__roo(self.hpin)
+            self.__addstates(self.__join_hp(states, states[:,1] > 0), roo, rco, trans)
+        else:
+            ioli = 1
 
-        if hashp:
-            roo = self.__roo(self.hpin)
-            for inds in self.__join_hp(states):
-                trans[inds[0], list(inds[0:2])] += roo[inds[2], inds[3], :]
-                trans[inds[1], list(inds[0:2])] += rco
+        maxs = self.__maxs
+        for oli in self.oligos:
+            if oli in masked:
+                continue
 
-        for (ioli, roo), side in product(
-                enumerate(self.__roo(oli) for oli in self.oligos if oli not in masked),
-                (False, True)
-        ):
-            for inds in self.__join_oligo(maxs, states, side, ioli+hashp+1):
-                trans[inds[0], list(inds[0:2])] += roo[inds[2], inds[3], :]
-                trans[inds[1], list(inds[0:2])] += rco
+            roo = self.__roo(oli)
+            for side in (True, False):
+                self.__addstates(
+                    self.__join_oligo(maxs, states, side, ioli),
+                    roo,
+                    rco,
+                    trans
+                )
+            ioli += 1
 
-        return states, trans
+        return trans
 
-    def initialstate(self, *masked, states: Optional[np.ndarray] = None):
+    def initialstate(self, *masked, states: Optional[np.ndarray] = None, method = 'stablestate'):
         """
         Return the initial state.
 
@@ -217,63 +231,60 @@ class StatesTransitions(BaseComputations):
         3. The hairpin is at the min position for each potential state.
         """
         masked, states = self.__masked_and_states(masked, states)
-        olstates       = self.states(self.hpin, *masked)
-        good           = np.max(olstates, axis = 1) != _OFF
-
-        prob           = _solve(
-            self.transitions(self.hpin, *masked, states = olstates)[1],
-            good.astype(self.dtype)
+        return (
+            self.__initialstate_full(states, 1) if self.hpin in masked else
+            self.__initialstate_full(states, 2) if method == 'all' else
+            self.__initialstate_withhpin_stable(masked, states)
         )
-        prob[np.logical_not(good)] = 0.
-
-        if np.all(prob <= 0.):
-            return states, np.zeros(len(states), dtype = self.dtype)
-
-        prob     /= np.sum(prob)
-
-        inds      = self.__find_hpstates(states, olstates)
-        out       = np.zeros(len(states), dtype = self.dtype)
-        out[inds] = prob
-        return states, out
-
-    def finalstate(self, *_ , states: np.ndarray):
-        """
-        Return the final state.
-
-        This is defined as:
-
-        1. All oligos are off.
-        2. The hairpin is fully closed
-        """
-        out = np.zeros(len(states), dtype = self.dtype)
-        out[states['hp'] == len(self.hpin.seq)-1] = 1.
-        return out
 
     def compute(
             self,
             *masked,
             ini:         Optional[np.ndarray] = None,
-            fin:         Optional[np.ndarray] = None,
+            available:   Optional[np.ndarray] = None,
             states:      Optional[np.ndarray] = None,
             transitions: Optional[np.ndarray] = None
     ):
         "compose a final with an initial state"
-        mask, states = self.__masked_and_states(masked, states)
-        get          = lambda x, y: x(*mask, states = states) if y is None else y
-        return (
-            _solve(
-                get(self.transitions, transitions),
-                get(self.initialstate, ini)
-            ) @ (
-                get(self.finalstate, fin)
-            )
+        masked, states = self.__masked_and_states(masked, states)
+        get          = lambda x, y, **z: (
+            x(*masked, states = states, **z)
+            if not isinstance(y, (list,np.ndarray, tuple)) else
+            y
         )
+        transitions  = get(self.transitions,      transitions)
+        ini          = get(self.initialstate,     ini, method = ini)
+        available    = get(self.transitionstates, available)
 
-    def statistics(self, *masked, rate = 1e-6*2.8):
+        if available is not None:
+            transitions = transitions[available,:][:,available]
+            ini         = ini[available]
+
+        out = -_solve(transitions, ini)
+
+        if available is not None:
+            tmp, out       = out, np.zeros(len(available), dtype = self.dtype)
+            out[available] = tmp
+        return out
+
+    def transitionstates(self, *masked, states: Optional[np.ndarray] = None) -> np.ndarray:
+        "states to be used for computations"
+        states = self.__masked_and_states(masked, states)[1]
+        if self.hpin in masked:
+            return states[:,1:].max(1) != _OFF
+        return states[:,1] != states[:,1].max()
+
+    def statistics(self, *masked, rate = None):
         "all results"
-        trep        = rate*self.compute(*masked)
+        masked, states = self.__masked_and_states(masked, None)
+        trep  = self.compute(*masked, states = states).sum()
+        trep *= (
+            rate if rate is not None    else
+            1e-6 if self.hpin in masked else
+            2.8e-6
+        )
         temp, delta = self.__saltinfo(self.hpin)[2:]
-        dgf         = self.cor*delta+((len(self.hpin)-1)*(self.gss-self.gds))
+        dgf         = self.cor*delta+((len(self.hpin.seq)-1)*(self.gss-self.gds))
         return (
             trep,
             1/trep,                         # kon
@@ -375,8 +386,8 @@ class StatesTransitions(BaseComputations):
                 denthalpy[i] += tmp
 
         dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        for i in (strands.dsbegin, strands.dsend-1):
-            denthalpy[i] += dgt0*(strands.seq[i] in 'AaTt')
+        for i, j  in ((strands.dsbegin, 0), (strands.dsend-2, 1)):
+            denthalpy[i] += dgt0*(strands.seq[i+j] in 'AaTt')
 
         # inside bases
         for i, key in strands.dsbases():
@@ -397,7 +408,7 @@ class StatesTransitions(BaseComputations):
 
         dgt0       = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
         if strands.seq[cast(int, sli.start)] in 'AaTt':
-            roo[sli.start,0]             -= -dgt0
+            roo[sli.start,0]             += -dgt0
         if strands.seq[cast(int, sli.stop)] in 'AaTt':
             roo[cast(int, sli.stop)-1,0] += dgt0
 
@@ -407,53 +418,91 @@ class StatesTransitions(BaseComputations):
 
     def __rco(self):
         "return closing factors"
-        return self.elasticity.rco(self.temperatures)*np.array([1, -1], dtype = self.dtype)
+        return self.elasticity.rco(self.temperatures)*np.array([1., -1.], dtype = self.dtype)
 
-    @staticmethod
+    @classmethod
     def __join(
+            cls,
             states:  np.ndarray,
             aopened: np.ndarray,
             ison:    np.ndarray,
-            keys:    List[int]
-    )-> Tuple[np.ndarray, np.ndarray]:
-        closed, opened  = [
-            np.recarray(buf.shape[:1], formats = ['i4']*buf.shape[1], buf = buf)
-            for buf in (np.copy(states[:,1:]), aopened)
-        ]
+            key:     int
+    ) -> np.ndarray:
+        closed, opened = cls.__frombuffer(np.copy(states[:,1:]), aopened)
+        inds           = np.searchsorted(closed, opened)
+        good           = closed[inds] == opened
+        inds           = inds[good]
 
-        inds        = np.searchsorted(closed, opened)
-        good        = closed[inds] == opened
-        inds        = inds[good]
-
-        out        = states[ison, :][:, keys][good]
-        out[:,1]   = states[inds, :][:,0]
-        return inds, out
+        keys = [0, 0, key, key]
+        out  = np.frombuffer(states[ison, :][:, keys][good], dtype = _JOIN_DT)
+        out['states']['iopen']       = states[inds, :][:,0]
+        out[['canclose', 'canopen']] = True
+        return out
 
     @classmethod
-    def __join_hp(cls, states) -> np.ndarray:
-        ison                          = states[:,1] > 0
+    def __join_hp(cls, states, ison) -> np.ndarray:
         aopened                       = states[:,1:][ison]
         aopened[:,0]                 -= 1
         aopened[aopened[:,0] == 1, 0] = 0 # require 2 bases to hold the hp
 
-        inds, out = cls.__join(states, aopened, ison, [0, 0, 1, 1])
-        out[:,2] -= 2
-        out[:,3]  = states[inds,1] == 0
+        out            = cls.__join(states, aopened, ison, 1)
+        out['islast']  = out['base'] <= 3
+        out['canopen'] = (out['base'] > 2) & (out['base'] < states[:,1].max())
+        out['base']    = np.maximum(out['base']-2, 0)
+        return out
+
+    @staticmethod
+    def __ndoublestrands(maxs:int, out: np.ndarray):
+        return (out % maxs) - (out // maxs)
+
+    @classmethod
+    def __islast(cls, maxs:int, out: np.ndarray):
+        out['islast'] = cls.__ndoublestrands(maxs, out['base']) <= 3 | (out['base'] == _OFF)
+
+    @classmethod
+    def __join_oligo_left(cls, maxs:int, states, key:int) -> np.ndarray:
+        ison    = states[:,key] != _OFF
+        aopened = states[:,1:][ison]
+        aopened[:,key-1]                                                 += maxs
+        aopened[cls.__ndoublestrands(maxs, aopened[:,key-1]) <= 1, key-1] = _OFF
+
+        out = cls.__join(states, aopened, ison, key)
+        cls.__islast(maxs, out)
+        out['canclose'] = states[out['states']['iopen'], key] != _OFF
+        out['base']   //= maxs
         return out
 
     @classmethod
-    def __join_oligo(cls, maxs:int, states, isright:bool, key:int) -> np.ndarray:
-        off                  = states[:,key] != _OFF
-        aopened              = states[:,1:][off]
-        aopened[:,key-1]    += -1 if isright else maxs
-        going                = aopened[:,key-1]//maxs+1 >= (aopened[:,key-1]%maxs)
-        aopened[going,key-1] = _OFF
+    def __join_oligo_right(cls, maxs:int, states, key:int) -> np.ndarray:
+        # Dehibridiations are counted twice,
+        # once from the left, once from the right.
+        # We arbitrarily discard the right occurence
+        ison    = (cls.__ndoublestrands(maxs, states[:, key]) > 2)  & (states[:,key] != _OFF)
+        aopened = states[:,1:][ison]
+        aopened[:,key-1] += -1
 
-        inds, out            = cls.__join(states, aopened, off, [0, 0, key, key])
-
-        out[:,2] = ((out[:,2] % maxs)-2) if isright else (out[:,2] // maxs)
-        out[:,3] = states[inds,key] == _OFF
+        out = cls.__join(states, aopened, ison, key)
+        cls.__islast(maxs, out)
+        out['base'] = np.maximum((out['base'] % maxs)-2, states[:,key].min()//maxs)
         return out
+
+    @classmethod
+    def __join_oligo(cls, maxs:int, states, isright: bool, key:int) -> np.ndarray:
+        return (cls.__join_oligo_right if isright else cls.__join_oligo_left)(maxs, states, key)
+
+    @staticmethod
+    def __addstates(states, roo, rco, trans):
+        for inds in states:
+            lst = list(inds[0])
+            if inds['canclose']:
+                trans[lst, lst[1]] += rco
+            if inds['canopen']:
+                trans[lst, lst[0]] += roo[inds['base'], inds['islast'], :]
+
+    def __apriori(self, masked, states, trans):
+        """
+        Applying aprioris to the transitions.
+        """
 
     @staticmethod
     def __find_hpstates(states, olstates):
@@ -462,7 +511,7 @@ class StatesTransitions(BaseComputations):
         aopened[:,0]   = np.max(olstates[:,1:], axis = 1)-1
 
         closed, opened = [
-            np.recarray(buf.shape[:1], formats = ['i4']*buf.shape[1], buf = buf)
+            np.frombuffer(buf, dtype = 'i4,'*buf.shape[1])
             for buf in (aclosed, aopened)
         ]
 
@@ -482,6 +531,56 @@ class StatesTransitions(BaseComputations):
             states = next((i for i in masked if isinstance(i, np.ndarray)), None)
             masked = tuple(i for i in masked if not isinstance(i, np.ndarray))
 
+        masked = tuple(
+            i              if isinstance(i, Strands)                          else
+            self.oligos[i] if isinstance(i, int)                              else
+            self.hpin      if i in ('hpin', 'seq', 'template', self.hpin.seq) else
+            self.oligos[0] if i == 'oligo'                                    else
+            next(j for j in self.oligos if j.seq == i)
+            for i in masked
+        )
+
         if states is None:
             states = self.states(*masked)
         return masked, states
+
+    def __initialstate_full(self, states, first):
+        maxs  = self.__maxs
+        valid = states[:,first:][states[:,first:] != _OFF]
+        inds  = (valid.min(0) // maxs) * maxs + (valid.max(0) % maxs)
+        if first == 2:
+            inds = np.insert(inds, 0, max(0, (inds//maxs).min()-1))
+        return (states[:,1:] == inds).ravel().astype(self.dtype)
+
+    __INIT_LOOP = 3
+    def __initialstate_withhpin_stable(self, masked, states):
+        olmask             = (self.hpin,)+masked
+        olstates           = self.__masked_and_states(olmask, None)[1]
+        left, right        = self.__frombuffer(*(np.copy(i) for i in (states[:,1:], olstates)))
+        maxv               = olstates[:,1:].min(1).ravel()
+        maxv[maxv == _OFF] = states[:,1].max()
+        right['f0']        = np.maximum(maxv//self.__maxs-1, 0)
+        inds               = np.searchsorted(left, right)
+        good               = left[inds] == right
+        stable             = None
+        for _ in range(self.__INIT_LOOP):
+            stable = self.compute(*olmask, states = olstates, ini = stable)
+            stable[(~good) | (stable < 0.)] = 0.
+            cnt = stable.sum()
+            if cnt <= 0.:
+                break
+            stable /= cnt
+
+        out             = np.zeros(len(states), dtype = self.dtype)
+        out[inds[good]] = stable
+        return out
+
+    @staticmethod
+    def __frombuffer(*buffers):
+        return (
+            np.frombuffer(
+                buf,
+                dtype = [(f'f{i}', 'i4') for i in range(buf.shape[1])]
+            )
+            for buf in buffers
+        )
