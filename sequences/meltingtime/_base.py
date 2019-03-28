@@ -5,6 +5,7 @@
 from typing     import Tuple, cast
 import numpy  as np
 try:
+    # pylint: disable=unused-import
     from sequences.translator import complement, gccontent
 except ImportError:
     # stay BioPython compatible
@@ -264,48 +265,6 @@ class SingleStrandModel:
     def rch(self, temperatures):
         """closing rates:only depend on the force"""
         return np.exp(-2*self.gss(temperatures))
-
-class KeyComputer:
-    "computes keys for various energy tables"
-    def __init__(self, seq, oligo):
-        self.seq   = str(seq)
-        self.oligo = str(oligo if oligo else complement(seq))
-
-    def key(self, ind:int) -> str:
-        "get table keys"
-        if ind == -1:
-            return self.seq[-2:][::-1]  + '/' + self.oligo[-2:][::-1]
-        return self.oligo[ind:ind+2] + '/' + self.seq[ind:ind+2]
-
-    def terminalkey(self, ind) -> str:
-        "get table keys for terminal endings"
-        if ind == -1:
-            return self.oligo[-2:] + './' + self.seq[-2:]        + '.'
-        return self.seq[:2][::-1]  + './' + self.oligo[:2][::-1] + '.'
-
-    def pop(self, ind):
-        "shorten the current sequences"
-        if ind == 0:
-            self.seq   = self.seq[1:]
-            self.oligo = self.oligo[1:]
-        elif ind == -1:
-            self.seq   = self.seq[:-1]
-            self.oligo = self.oligo[:-1]
-
-class ComputationDetails(KeyComputer): # pylint: disable=too-many-instance-attributes
-    "All info for computing the melting times & other stats"
-    dg:  np.ndarray
-    dgh: np.ndarray
-    def __init__(self, seq, oligo):
-        super().__init__(seq, oligo)
-        self.oseq   = self.seq
-        self.ooligo = self.oligo
-        self.delta  = np.zeros(2, dtype = 'f8')
-
-    def resetdg(self):
-        "sets dg & dgh"
-        self.dg    = np.zeros(len(self.oseq)-1, dtype = 'f8')
-        self.dgh   = np.zeros(len(self.oseq)-1, dtype = 'f8')
 
 class BaseComputations: # pylint: disable=too-many-instance-attributes
     """
