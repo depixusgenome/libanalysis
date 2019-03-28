@@ -50,34 +50,17 @@ class Strands:
         "return the double stranded part"
         return self.dsseq, self.dsopposite
 
-    def dskey(self, ind:int) -> str:
-        "get table keys"
-        if ind == -1:
-            return self.dsseq[-2:][::-1]  + '/' + self.dsopposite[-2:][::-1]
-        return self.dsopposite[ind:ind+2] + '/' + self.dsseq[ind:ind+2]
-
     def key(self, ind:int) -> str:
         "get table keys"
         return self.opposite[ind:ind+2] + '/' + self.seq[ind:ind+2]
 
     def terminalbases(self) -> Iterator[Tuple[int, str]]:
         "return keys for terminal bases"
-        if self.dsend < len(self.seq):
-            yield (
-                self.dsend-1,
-                self.opposite[self.dsend-1:self.dsend+1]
-                + './'
-                + self.seq[self.dsend-1:self.dsend+1]
-                + '.'
-            )
-        if self.dsbegin > 0:
-            yield (
-                self.dsbegin-1,
-                self.seq[self.dsbegin-1:self.dsbegin+1][::-1]
-                + './'
-                + self.opposite[self.dsbegin-1:self.dsbegin+1][::-1]
-                + '.'
-            )
+        start, end = self.dsbegin, self.dsend-2
+        seq,   opp = self.seq,     self.opposite
+        if end > start:
+            yield (end, f'{opp[end:end+2]}./{seq[end:end+2]}.')
+        yield (start, f'{seq[start:start+2][::-1]}./{opp[start:start+2][::-1]}.')
 
     def danglingends(self) -> Iterator[Tuple[int, str]]:
         "return keys for terminal bases"
@@ -97,7 +80,13 @@ class Strands:
 
     def dsbases(self) -> Iterator[Tuple[int, str]]:
         "return keys for the double stranded part of the dna"
-        yield from ((i, self.key(i)) for i in range(self.dsbegin, self.dsend-1))
+        start = self.dsbegin
+        if self.opposite[self.dsbegin].lower() != complement(self.seq[self.dsbegin]).lower():
+            start += 1
+        stop = self.dsend-1
+        if self.opposite[stop-1].lower() != complement(self.seq[stop-1]).lower():
+            stop -= 1
+        yield from ((i, self.key(i)) for i in range(start, stop))
 
     @property
     def isoligo(self):
@@ -277,20 +266,30 @@ class StatesTransitions(BaseComputations):
     def statistics(self, *masked, rate = None):
         "all results"
         masked, states = self.__masked_and_states(masked, None)
-        trep  = self.compute(*masked, states = states).sum()
-        trep *= (
-            rate if rate is not None    else
-            1e-6 if self.hpin in masked else
-            2.8e-6
+        available      = self.transitionstates(*masked, states = states)
+
+        vect           = (
+            self.compute(*masked, states = states, available = available)
+            * (rate if rate is not None else 1e-6 if self.hpin in masked else 2.8e-6)
         )
-        temp, delta = self.__saltinfo(self.hpin)[2:]
-        dgf         = self.cor*delta+((len(self.hpin.seq)-1)*(self.gss-self.gds))
+
+        def _info(key:int, strand: Strands) -> Tuple[float, float, float]:
+            temp, delta = self.__saltinfo(strand)[2:]
+            good        = states[available, key+1+ (self.hpin not in masked)] != _OFF
+            cnt         = vect[available][good].sum()
+            return temp, self.cor*delta+((len(strand.seq)-1)*(self.gss-self.gds)), cnt
+
+        info = np.array([
+            _info(i, j)
+            for i, j in enumerate(k for k in self.oligos if k not in masked)
+        ])
+        dgf =  np.average(info[:,1], weights = info[:,2])
         return (
-            trep,
-            1/trep,                         # kon
-            1/(trep*np.exp(dgf) * 1000000), # koff
+            vect.sum(),
+            1/vect.sum(),                   # kon
+            1/(vect.sum()*np.exp(dgf) * 1000000), # koff
             dgf,
-            temp
+            np.average(info[:,0], weights = info[:,2])
         )
 
     def __index_info(
@@ -383,7 +382,7 @@ class StatesTransitions(BaseComputations):
         for i, key in strands.terminalbases():
             tmp = self.table.get(key, None)
             if tmp is not None:
-                denthalpy[i] += tmp
+                denthalpy[i] += self.dgcor(tmp)
 
         dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
         for i, j  in ((strands.dsbegin, 0), (strands.dsend-2, 1)):
