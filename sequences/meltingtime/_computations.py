@@ -9,10 +9,22 @@ import numpy  as np
 from   numpy.linalg  import solve as _solve
 from   ._base        import BaseComputations, complement, gccontent, SaltInfo
 
+def _frombuffer(*buffers):
+    return (
+        np.frombuffer(
+            buf,
+            dtype = [(f'f{i}', 'i4') for i in range(buf.shape[1])]
+        )
+        for buf in buffers
+    )
+
 class InitialState(Enum):
     "Compuptation mode of the initial state"
     stable     = "stable"
     hybridized = "hybridized"
+    @classmethod
+    def _missing_(cls, value):
+        return InitialState('stable') if value is None else super()._missing_(value)
 
 class Strands:
     "all about strands"
@@ -23,6 +35,9 @@ class Strands:
             shift:      int           = 0,
             density:    float         = 25
     ):
+        if isinstance(seq, (list, tuple)) and opposite is None:
+            seq, opposite = seq
+
         if opposite is None:
             opposite = complement(cast(str, seq))
         elif seq is None:
@@ -143,8 +158,10 @@ class Strands:
         nds = max(0, self.dsend - max(nzipped+1, self.dsbegin))
         return (nds*(nds-1))//2+1
 
-_JOIN_DT: np.dtype = np.dtype([
-    ('states',  np.dtype([('iclose',  'i4'), ('iopen',    'i4')])),
+_OFF:        int      = cast(int, np.iinfo('i4').max)
+_DTYPE:      np.dtype = np.dtype('f8')
+TRANSITIONS: np.dtype = np.dtype([
+    ('states',   np.dtype([('iclose',  'i4'), ('iopen',    'i4')])),
     ('base',     'i4'),
     ('islast',   'i1'),
     ('canclose', 'bool'),
@@ -152,36 +169,33 @@ _JOIN_DT: np.dtype = np.dtype([
     ('_',        'i1')
 ])
 
-_OFF:     int      = cast(int, np.iinfo('i4').max)
-class StatesTransitions(BaseComputations):
-    "compute results for complex states"
+class StrandList:
+    "compute the state list for complex states"
     def __init__(self, hpin, *oligos, chpin = None, **_):
-        super().__init__(**_)
-        self.dtype  = np.dtype('f8')
         self.hpin   = Strands(hpin, opposite = chpin)
+        def _new(oligo:str, seq:bool = False, shift:int = 0) -> Strands:
+            "create a new strand"
+            return (
+                Strands(seq = oligo, opposite = self.hpin.opposite, shift = -abs(shift))
+                if seq else
+                Strands(seq = self.hpin.seq, opposite = oligo, shift = abs(shift))
+            )
+
         self.oligos = sorted(
             [
-                self.newstrands(*i)  if isinstance(i, (list, tuple)) else
-                self.newstrands(**i) if isinstance(i, dict) else
-                self.newstrands(i)
+                _new(*i)  if isinstance(i, (list, tuple)) else
+                _new(**i) if isinstance(i, dict) else
+                _new(i)
                 for i in oligos
             ],
             key = lambda x: x.dsbegin
         )
 
         test = lambda ols: np.all(
-            np.array([i.dsend for i in ols[:-1]]) < np.array([i.dbegin for i in ols[1:]])
+            np.array([i.dsend for i in ols[:-1]]) < np.array([i.dsbegin for i in ols[1:]])
         )
         assert test([i for i in self.oligos if i.isoligo])
         assert test([i for i in self.oligos if i.iscoligo])
-
-    def newstrands(self, oligo:str, seq:bool = False, shift:int = 0) -> Strands:
-        "create a new strand"
-        return (
-            Strands(seq = oligo,         opposite = self.hpin.opposite, shift = shift)
-            if seq else
-            Strands(seq = self.hpin.seq, opposite = oligo,              shift = shift)
-        )
 
     def nstates(self, *masked) -> np.ndarray:
         """
@@ -205,126 +219,38 @@ class StatesTransitions(BaseComputations):
 
         return outs
 
-    def transitions(self, *masked, states : Optional[np.ndarray] = None) -> np.ndarray:
-        """
-        all the different states's
-        """
-        masked, states = self.__masked_and_states(masked, states)
-        trans          = np.zeros((len(states),)*2, dtype = self.dtype)
-        if self.hpin not in masked:
-            ioli = 2
-            roo  = self.__roo(self.hpin)
-            rco  = self.elasticity.rch(self.temperatures)*np.array([1, -1], dtype = self.dtype)
-            self.__addstates(self.__join_hp(states, states[:,1] > 0), roo, rco, trans)
-        else:
-            ioli = 1
+    @classmethod
+    def hairpintransitions(cls, states: np.ndarray) -> np.ndarray:
+        "return the hairpin transitions: an array of TRANSITIONS"
+        ison                          = states[:,1] > 0
+        aopened                       = states[:,1:][ison]
+        aopened[:,0]                 -= 1
+        aopened[aopened[:,0] == 1, 0] = 0 # require 2 bases to hold the hp
 
-        maxs = self.__maxs
-        rco  = self.elasticity.rco(self.temperatures)*np.array([1, -1], dtype = self.dtype)
-        for oli in self.oligos:
-            if oli in masked:
-                continue
-
-            roo = self.__roo(oli)
-            for side in (True, False):
-                self.__addstates(
-                    self.__join_oligo(maxs, states, side, ioli),
-                    roo,
-                    rco,
-                    trans
-                )
-            ioli += 1
-
-        return trans
-
-    def initialstate(
-            self,
-            *masked,
-            states: Optional[np.ndarray] = None,
-            method = InitialState.stable.name
-    ):
-        """
-        Return the initial state.
-
-        This is defined as:
-
-        1. All oligos are bound by at least 2 base.
-        2. The probability of such states are determined considering
-        transitions without the hairpin moving in.
-        3. The hairpin is at the min position for each potential state.
-        """
-        masked, states = self.__masked_and_states(masked, states)
-        return (
-            self.__initialstate_full(states, 1) if self.hpin in masked else
-            self.__initialstate_full(states, 2) if InitialState(method).name == 'all' else
-            self.__initialstate_withhpin_stable(masked, states)
-        )
-
-    def compute(
-            self,
-            *masked,
-            ini:         Optional[np.ndarray] = None,
-            available:   Optional[np.ndarray] = None,
-            states:      Optional[np.ndarray] = None,
-            transitions: Optional[np.ndarray] = None
-    ):
-        "compose a final with an initial state"
-        masked, states = self.__masked_and_states(masked, states)
-        get          = lambda x, y, **z: (
-            x(*masked, states = states, **z)
-            if not isinstance(y, (list,np.ndarray, tuple)) else
-            y
-        )
-        transitions  = get(self.transitions,      transitions)
-        ini          = get(self.initialstate,     ini, method = ini)
-        available    = get(self.transitionstates, available)
-
-        if available is not None:
-            transitions = transitions[available,:][:,available]
-            ini         = ini[available]
-
-        out = -_solve(transitions, ini)
-
-        if available is not None:
-            tmp, out       = out, np.zeros(len(available), dtype = self.dtype)
-            out[available] = tmp
+        out            = cls.__join(states, aopened, ison, 1)
+        out['canopen'] = (out['base'] > 2) & (out['base'] < states[:,1].max())
+        out['base']    = np.maximum(out['base']-2, 0)
         return out
 
-    def transitionstates(self, *masked, states: Optional[np.ndarray] = None) -> np.ndarray:
+    @classmethod
+    def oligotransitions(cls, maxs:int, states, isright: bool, key:int) -> np.ndarray:
+        "return the oligo transitions: an array of TRANSITIONS"
+        return (cls.__join_oligo_right if isright else cls.__join_oligo_left)(maxs, states, key)
+
+    def transiantstates(self, *masked, states: Optional[np.ndarray] = None) -> np.ndarray:
         "states to be used for computations"
-        states = self.__masked_and_states(masked, states)[1]
+        states = self.parseargs(masked, states)[1]
         if self.hpin in masked:
             return states[:,1:].max(1) != _OFF
         return states[:,1] != states[:,1].max()
 
-    def statistics(self, *masked, rate = None, **kwa):
-        "all results"
-        masked, states = self.__masked_and_states(masked, None)
-        available      = self.transitionstates(*masked, states = states)
-
-        vect           = (
-            self.compute(*masked, states = states, available = available, **kwa)
-            * (rate if rate is not None else 1e-6 if self.hpin in masked else 2.8e-6)
+    def __repr__(self):
+        hpin = f"hairpin: {self.hpin.seq}\n         {self.hpin.opposite}"
+        ols  = "\n".join(
+            f"{i: 7d}: {j.seq}\n         {j.opposite}"
+            for i, j in enumerate(self.oligos)
         )
-
-        def _info(key:int, strands: Strands) -> Tuple[float, float, float]:
-            temp, delta = self.__saltinfo(strands)[2:]
-            good        = states[available, key+1+ (self.hpin not in masked)] != _OFF
-            cnt         = vect[available][good].sum()
-            return temp, self.cor*delta+(strands.dssize-1)*(self.gss-self.gds), cnt
-
-        info = np.array([
-            _info(i, j)
-            for i, j in enumerate(k for k in self.oligos if k not in masked)
-        ])
-        dgf =  np.average(info[:,1], weights = info[:,2])
-        return (
-            vect.sum(),
-            1/vect.sum(),                   # kon
-            1/(vect.sum()*np.exp(dgf) * 1000000), # koff
-            dgf,
-            np.average(info[:,0], weights = info[:,2])
-        )
+        return f"{super().__repr__()}\n{hpin}\n{ols}"
 
     def __index_info(
             self,
@@ -337,7 +263,7 @@ class StatesTransitions(BaseComputations):
     ]:
         hpin = self.hpin not in masked
         ols  = [i for i in self.oligos if i not in masked] if masked else self.oligos
-        maxs = self.__maxs
+        maxs = self.ndigits
         assert maxs < _OFF and (maxs**2) < _OFF # type: ignore
 
         inner = [
@@ -366,88 +292,33 @@ class StatesTransitions(BaseComputations):
         )
         return hpin, inner, ind, itr
 
-    def __saltinfo(self, strands: Strands) -> SaltInfo:
-        "return the salt info for a given oligo"
-        delta = self.__delta(strands)
-        return self.salt.compute(
-            strands.dsseq,
-            self.hpin.density,
-            strands.density,
-            self.temperatures.mtG,
-            delta
+    @property
+    def ndigits(self) -> int:
+        "number of digits per index indicating the start/end of a hybridization"
+        return 10**(int(np.round(np.log10(self.hpin.maxsize)))+1)
+
+    def parseargs(
+            self,
+            masked: tuple,
+            states: Optional[np.ndarray]
+    ) -> Tuple[Tuple[Strands,...], np.ndarray]:
+        "returns the masked strands and the list of states"
+        if states is None:
+            states = next((i for i in masked if isinstance(i, np.ndarray)), None)
+            masked = tuple(i for i in masked if not isinstance(i, np.ndarray))
+
+        masked = tuple(
+            i              if isinstance(i, Strands)                          else
+            self.oligos[i] if isinstance(i, int)                              else
+            self.hpin      if i in ('hpin', 'seq', 'template', self.hpin.seq) else
+            self.oligos[0] if i == 'oligo'                                    else
+            next(j for j in self.oligos if j.seq == i)
+            for i in masked
         )
 
-    def __delta(self, strands:Strands) -> np.ndarray:
-        "compute the deltas"
-        dsseq   = strands.dsseq
-        delta    = np.array([0., 0.], dtype = self.dtype)
-
-        # Type: General initiation value
-        delta += self.table['init']
-
-        # Type: Duplex with no (allA/T) or at least one (oneG/C) GC pair
-        delta += self.table['init_'+('oneG/C' if gccontent(dsseq.upper()) else 'allA/T')]
-
-        # Type: Penalty if 5' end is T
-        delta += self.table['init_5T/A'] * ((dsseq[0] in 'Tt')+(dsseq[-1] in 'Aa'))
-
-        # Type: Different values for G/C or A/T terminal basepairs
-        ends = (dsseq[0] + dsseq[-1]).upper()
-        for tpe in ("AT", "GC"):
-            tmp   = self.table[f'init_{tpe[0]}/{tpe[1]}']
-            delta += sum(ends.count(i) for i in tpe) * tmp
-
-        # Terminal endings
-        for _, key in chain(strands.terminalbases(), strands.danglingends()):
-            tmp = self.table.get(key, None)
-            if tmp is not None:
-                delta += tmp
-
-        # inside bases
-        for _, key in strands.dsbases(self.table):
-            delta += self.table[key]
-        return delta
-
-    def __dgperbase(self, strands:Strands) -> np.ndarray:
-        "compute the dg"
-        denthalpy = np.zeros(strands.maxsize, dtype = self.dtype)
-
-        # Terminal endings
-        for i, key in strands.terminalbases():
-            tmp = self.table.get(key, None)
-            if tmp is not None:
-                denthalpy[i] += self.dgcor(tmp)
-
-        dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        for i, j  in ((strands.dsbegin, 0), (strands.dsend-2, 1)):
-            denthalpy[i] += dgt0*(strands.seq[i+j] in 'AaTt')
-
-        # inside bases
-        for i, key in strands.dsbases(self.table):
-            denthalpy[i] += self.dgcor(self.table[key])
-
-        # We compute salt correction for the hybridized oligo that is with
-        # reduced charge near dsDNA
-        salt = self.cor*self.__saltinfo(strands)[0]
-        denthalpy[max(0, strands.dsbegin-1):strands.dsend-1] += salt
-        return denthalpy
-
-    def __roo(self, strands:Strands):
-        "create the roo vector"
-        sli        = slice(strands.dsbegin, strands.dsend-1)
-
-        roo        = np.zeros((strands.maxsize,2), dtype = self.dtype)
-        roo[sli,0] = -self.__dgperbase(strands)[sli]
-
-        dgt0       = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
-        if strands.seq[cast(int, sli.start)] in 'AaTt':
-            roo[sli.start,0]             += -dgt0
-        if strands.seq[cast(int, sli.stop)] in 'AaTt':
-            roo[cast(int, sli.stop)-1,0] += dgt0
-
-        roo[sli,1] += roo[sli,0]-self.dgcor(self.table['init_G/C'])
-        roo[sli,:]  = np.exp(roo[sli,:])
-        return np.kron(roo, [-1., 1.]).reshape((-1, 2, 2))
+        if states is None:
+            states = self.states(*masked)
+        return masked, states
 
     @classmethod
     def __join(
@@ -457,27 +328,16 @@ class StatesTransitions(BaseComputations):
             ison:    np.ndarray,
             key:     int
     ) -> np.ndarray:
-        closed, opened = cls.__frombuffer(np.copy(states[:,1:]), aopened)
+        closed, opened = _frombuffer(np.copy(states[:,1:]), aopened)
         inds           = np.searchsorted(closed, opened)
         good           = closed[inds] == opened
         inds           = inds[good]
 
         keys = [0, 0, key, key]
-        out  = np.frombuffer(states[ison, :][:, keys][good], dtype = _JOIN_DT)
+        out  = np.frombuffer(states[ison, :][:, keys][good], dtype = TRANSITIONS)
         out['states']['iopen']       = states[inds, :][:,0]
         out[['canclose', 'canopen']] = True
         out['islast']                = False
-        return out
-
-    @classmethod
-    def __join_hp(cls, states, ison) -> np.ndarray:
-        aopened                       = states[:,1:][ison]
-        aopened[:,0]                 -= 1
-        aopened[aopened[:,0] == 1, 0] = 0 # require 2 bases to hold the hp
-
-        out            = cls.__join(states, aopened, ison, 1)
-        out['canopen'] = (out['base'] > 2) & (out['base'] < states[:,1].max())
-        out['base']    = np.maximum(out['base']-2, 0)
         return out
 
     @staticmethod
@@ -515,9 +375,147 @@ class StatesTransitions(BaseComputations):
         out['base'] = np.maximum((out['base'] % maxs)-2, states[:,key].min()//maxs)
         return out
 
-    @classmethod
-    def __join_oligo(cls, maxs:int, states, isright: bool, key:int) -> np.ndarray:
-        return (cls.__join_oligo_right if isright else cls.__join_oligo_left)(maxs, states, key)
+class EnergyComputations(BaseComputations):
+    "computes the enthalpies & entropies per base"
+    def saltinfo(self, hpin: Strands, strands: Strands, dtype: np.dtype = _DTYPE) -> SaltInfo:
+        "return the salt info for a given oligo"
+        delta = self.__delta(strands, dtype)
+        return self.salt.compute(
+            strands.dsseq,
+            hpin.density,
+            strands.density,
+            self.temperatures.mtG,
+            delta
+        )
+
+    def roo(self, hpin: Strands, strands:Strands, dtype: np.dtype = _DTYPE):
+        "create the roo vector"
+        sli        = slice(strands.dsbegin, strands.dsend-1)
+
+        roo        = np.zeros((strands.maxsize,2), dtype = dtype)
+        roo[sli,0] = -self.__dgperbase(hpin, strands, dtype)[sli]
+
+        dgt0       = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
+        if strands.seq[cast(int, sli.start)] in 'AaTt':
+            roo[sli.start,0]             += -dgt0
+        if strands.seq[cast(int, sli.stop)] in 'AaTt':
+            roo[cast(int, sli.stop)-1,0] += dgt0
+
+        roo[sli,1] += roo[sli,0]-self.dgcor(self.table['init_G/C'])
+        roo[sli,:]  = np.exp(roo[sli,:])
+        return np.kron(roo, [-1., 1.]).reshape((-1, 2, 2))
+
+    def rch(self, dtype: np.dtype = _DTYPE) -> np.ndarray:
+        "return the hairpin closing r"
+        return self.elasticity.rch(self.temperatures)*np.array([1, -1], dtype = dtype)
+
+    def rco(self, dtype: np.dtype = _DTYPE) -> np.ndarray:
+        "return the oligos' closing r"
+        return self.elasticity.rco(self.temperatures)*np.array([1, -1], dtype = dtype)
+
+    def temperaturesanddgf(
+            self,
+            hpin:    Strands,
+            strands: Strands,
+            dtype:   np.dtype = _DTYPE
+    ) -> Tuple[float, float]:
+        "return the melting temperature and the dgf"
+        temp, delta = self.saltinfo(hpin, strands, dtype)[2:]
+        return temp, self.cor*delta+(strands.dssize-1)*(self.gss-self.gds)
+
+    def __delta(self, strands:Strands, dtype: np.dtype = _DTYPE) -> np.ndarray:
+        "compute the deltas"
+        dsseq   = strands.dsseq
+        delta    = np.array([0., 0.], dtype = dtype)
+
+        # Type: General initiation value
+        delta += self.table['init']
+
+        # Type: Duplex with no (allA/T) or at least one (oneG/C) GC pair
+        delta += self.table['init_'+('oneG/C' if gccontent(dsseq.upper()) else 'allA/T')]
+
+        # Type: Penalty if 5' end is T
+        delta += self.table['init_5T/A'] * ((dsseq[0] in 'Tt')+(dsseq[-1] in 'Aa'))
+
+        # Type: Different values for G/C or A/T terminal basepairs
+        ends = (dsseq[0] + dsseq[-1]).upper()
+        for tpe in ("AT", "GC"):
+            tmp   = self.table[f'init_{tpe[0]}/{tpe[1]}']
+            delta += sum(ends.count(i) for i in tpe) * tmp
+
+        # Terminal endings
+        for _, key in chain(strands.terminalbases(), strands.danglingends()):
+            tmp = self.table.get(key, None)
+            if tmp is not None:
+                delta += tmp
+
+        # inside bases
+        for _, key in strands.dsbases(self.table):
+            delta += self.table[key]
+        return delta
+
+    def __dgperbase(self, hpin:Strands, strands:Strands, dtype = 'f8') -> np.ndarray:
+        "compute the dg"
+        denthalpy = np.zeros(strands.maxsize, dtype = dtype)
+
+        # Terminal endings
+        for i, key in strands.terminalbases():
+            tmp = self.table.get(key, None)
+            if tmp is not None:
+                denthalpy[i] += self.dgcor(tmp)
+
+        dgt0 = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
+        for i, j  in ((strands.dsbegin, 0), (strands.dsend-2, 1)):
+            denthalpy[i] += dgt0*(strands.seq[i+j] in 'AaTt')
+
+        # inside bases
+        for i, key in strands.dsbases(self.table):
+            denthalpy[i] += self.dgcor(self.table[key])
+
+        # We compute salt correction for the hybridized oligo that is with
+        # reduced charge near dsDNA
+        salt = self.cor*self.saltinfo(hpin, strands, dtype)[0]
+        denthalpy[max(0, strands.dsbegin-1):strands.dsend-1] += salt
+        return denthalpy
+
+class TransitionMatrix:
+    "compute a transition matrix for complex states"
+    def __init__(self, hpin, *oligos, chpin = None, **_):
+        self.dtype   = _DTYPE
+        self.strands = StrandList(hpin, *oligos, chpin = chpin, **_)
+        self.data    = EnergyComputations(**_)
+
+    def transitionmatrix(self, *masked, states : Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        all the different states's
+        """
+        masked, states = self.strands.parseargs(masked, states)
+        trans          = np.zeros((len(states),)*2, dtype = self.dtype)
+        if self.strands.hpin not in masked:
+            ioli = 2
+            roo  = self.data.roo(self.strands.hpin, self.strands.hpin, self.dtype)
+            rco  = self.data.rch(self.dtype)
+            self.__addstates(self.strands.hairpintransitions(states), roo, rco, trans)
+        else:
+            ioli = 1
+
+        maxs = self.strands.ndigits
+        rco  = self.data.rco(self.dtype)
+        for oli in self.strands.oligos:
+            if oli in masked:
+                continue
+
+            roo = self.data.roo(self.strands.hpin, oli, self.dtype)
+            for side in (True, False):
+                self.__addstates(
+                    self.strands.oligotransitions(maxs, states, side, ioli),
+                    roo,
+                    rco,
+                    trans
+                )
+            ioli += 1
+
+        return trans
 
     @staticmethod
     def __addstates(states, roo, rco, trans):
@@ -528,68 +526,107 @@ class StatesTransitions(BaseComputations):
             if inds['canopen']:
                 trans[lst, lst[0]] += roo[inds['base'], inds['islast'], :]
 
-    def __apriori(self, masked, states, trans):
-        """
-        Applying aprioris to the transitions.
-        """
-
-    @staticmethod
-    def __find_hpstates(states, olstates):
-        aclosed        = np.copy(states[:,1])
-        aopened        = np.copy(aclosed)
-        aopened[:,0]   = np.max(olstates[:,1:], axis = 1)-1
-
-        closed, opened = [
-            np.frombuffer(buf, dtype = 'i4,'*buf.shape[1])
-            for buf in (aclosed, aopened)
-        ]
-
-        inds = np.clip(np.searchsorted(closed, opened), 0, len(closed)-1)
-        return states[:,0][inds[closed[inds] == opened]]
-
-    @property
-    def __maxs(self) -> int:
-        return 10**(int(np.round(np.log10(self.hpin.maxsize)))+1)
-
-    def __masked_and_states(
+class TransitionStats(TransitionMatrix):
+    "compute transition stats for complex states"
+    def initialstate(
             self,
-            masked: tuple,
-            states: Optional[np.ndarray]
-    ) -> Tuple[Tuple[Strands,...], np.ndarray]:
-        if states is None:
-            states = next((i for i in masked if isinstance(i, np.ndarray)), None)
-            masked = tuple(i for i in masked if not isinstance(i, np.ndarray))
+            *masked,
+            states: Optional[np.ndarray] = None,
+            method = InitialState.stable.name
+    ):
+        """
+        Return the initial state.
 
-        masked = tuple(
-            i              if isinstance(i, Strands)                          else
-            self.oligos[i] if isinstance(i, int)                              else
-            self.hpin      if i in ('hpin', 'seq', 'template', self.hpin.seq) else
-            self.oligos[0] if i == 'oligo'                                    else
-            next(j for j in self.oligos if j.seq == i)
-            for i in masked
+        This is defined as:
+
+        1. All oligos are bound by at least 2 base.
+        2. The probability of such states are determined considering
+        transitions without the hairpin moving in.
+        3. The hairpin is at the min position for each potential state.
+        """
+        masked, states = self.strands.parseargs(masked, states)
+        return (
+            self.__initialstate_full(states, 1) if self.strands.hpin in masked else
+            self.__initialstate_full(states, 2) if InitialState(method).name == 'all' else
+            self.__initialstate_withhpin_stable(masked, states)
         )
 
-        if states is None:
-            states = self.states(*masked)
-        return masked, states
+    def compute(
+            self,
+            *masked,
+            ini:         Optional[np.ndarray] = None,
+            available:   Optional[np.ndarray] = None,
+            states:      Optional[np.ndarray] = None,
+            transitions: Optional[np.ndarray] = None
+    ):
+        "compose a final with an initial state"
+        masked, states = self.strands.parseargs(masked, states)
+        get          = lambda x, y, **z: (
+            x(*masked, states = states, **z)
+            if not isinstance(y, (list,np.ndarray, tuple)) else
+            y
+        )
+        transitions  = get(self.transitionmatrix, transitions)
+        ini          = get(self.initialstate,     ini, method = ini)
+        available    = get(self.strands.transiantstates,  available)
+
+        if available is not None:
+            transitions = transitions[available,:][:,available]
+            ini         = ini[available]
+
+        out = -_solve(transitions, ini)
+
+        if available is not None:
+            tmp, out       = out, np.zeros(len(available), dtype = self.dtype)
+            out[available] = tmp
+        return out
+
+    def statistics(self, *masked, rate = None, **kwa):
+        "all results"
+        masked, states = self.strands.parseargs(masked, None)
+        available      = self.strands.transiantstates(*masked, states = states)
+
+        vect           = (
+            self.compute(*masked, states = states, available = available, **kwa)
+            * (rate if rate is not None else 1e-6 if self.strands.hpin in masked else 2.8e-6)
+        )
+
+        def _info(key:int, strands: Strands) -> Tuple[float, float, float]:
+            good      = states[available, key+1+ (self.strands.hpin not in masked)] != _OFF
+            cnt       = vect[available][good].sum()
+            temp, dgf = self.data.temperaturesanddgf(self.strands.hpin, strands, self.dtype)
+            return temp, dgf, cnt
+
+        info = np.array([
+            _info(i, j)
+            for i, j in enumerate(k for k in self.strands.oligos if k not in masked)
+        ])
+        dgf =  np.average(info[:,1], weights = info[:,2])
+        return (
+            vect.sum(),
+            1/vect.sum(),                   # kon
+            1/(vect.sum()*np.exp(dgf) * 1000000), # koff
+            dgf,
+            np.average(info[:,0], weights = info[:,2])
+        )
 
     def __initialstate_full(self, states, first):
-        maxs  = self.__maxs
-        valid = states[:,first:][states[:,first:] != _OFF]
+        maxs  = self.strands.ndigits
+        valid = states[:,first:][states[:,first:].max(1) != _OFF]
         inds  = (valid.min(0) // maxs) * maxs + (valid.max(0) % maxs)
         if first == 2:
             inds = np.insert(inds, 0, max(0, (inds//maxs).min()-1))
-        return (states[:,1:] == inds).ravel().astype(self.dtype)
+        return ((states[:,1:] == inds).sum(1) == (states.shape[1]-1)).astype(self.dtype)
 
     __INIT_LOOP = 3
     def __initialstate_withhpin_stable(self, masked, states):
-        olmask             = (self.hpin,)+masked
-        olstates           = self.__masked_and_states(olmask, None)[1]
-        left, right        = self.__frombuffer(*(np.copy(i) for i in (states[:,1:], olstates)))
+        olmask             = (self.strands.hpin,)+masked
+        olstates           = self.strands.parseargs(olmask, None)[1]
+        left, right        = _frombuffer(*(np.copy(i) for i in (states[:,1:], olstates)))
         maxv               = olstates[:,1:].min(1).ravel()
         maxv[maxv == _OFF] = states[:,1].max()
 
-        right['f0']                   = np.maximum(maxv//self.__maxs, 0)
+        right['f0']                   = np.maximum(maxv//self.strands.ndigits, 0)
         right['f0'][right['f0'] == 1] = 0
 
         inds               = np.searchsorted(left, right)
@@ -606,13 +643,3 @@ class StatesTransitions(BaseComputations):
         out       = np.zeros(len(states), dtype = self.dtype)
         out[inds] = stable
         return out
-
-    @staticmethod
-    def __frombuffer(*buffers):
-        return (
-            np.frombuffer(
-                buf,
-                dtype = [(f'f{i}', 'i4') for i in range(buf.shape[1])]
-            )
-            for buf in buffers
-        )

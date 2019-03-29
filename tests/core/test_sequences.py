@@ -4,7 +4,7 @@
 import pytest
 from numpy.testing         import assert_allclose
 from sequences             import peaks, overlap, splitoligos, Translator
-from sequences.meltingtime import OldStatesTransitions, StatesTransitions
+from sequences.meltingtime import OldStatesTransitions, TransitionStats
 
 def test_peaks():
     "tests peaks"
@@ -175,15 +175,56 @@ def test_mt(mode, seq, oligo):
     "test melting times"
     truth = next(i[-1] for i in _MODES2 if i[:-1] == (mode, seq, oligo))
 
-    cnf   = StatesTransitions(seq, oligo, force = 0 if mode == "o" else 8.5)
+    cnf   = TransitionStats(seq, oligo, force = 0 if mode == "o" else 8.5)
     out   = cnf.statistics(*(('hpin',) if mode == "o" else ()), ini = 'hybridized')
     assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
 
     if mode != 'f':
-        cnf   = StatesTransitions(oligo[::-1], seq[::-1], force = 0 if mode == "o" else 8.5)
+        cnf   = TransitionStats(oligo[::-1], seq[::-1], force = 0 if mode == "o" else 8.5)
         out   = cnf.statistics(*(('hpin',) if mode == "o" else ()), ini = 'hybridized')
         assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
 
+_MODES3 = [
+    (
+        ("CCCCTAGCCC",  ("GATC", False, 3)),
+        (1.353985e-04,  7.385605e+03,  3.658067e-01, -3.902572e+00, -4.891802e+01)
+    ),
+    (
+        ((None, "CCCCTAGCCC"),  ("GATC", True, 3)),
+        (1.250645e-04,  7.995873e+03,  3.327501e-01, -3.728466e+00, -4.749436e+01)
+    ),
+    (
+        ("CCCCTAGGGGATTACCC",  ("CTAG", True, 3), ('ATTA', True, 10)),
+        (2.355904e-04,  4.244655e+03,  1.654704e-01, -3.663132e+00, -5.020851e+01)
+    ),
+    (
+        ("CCCCTAGGGGCTAGCCC",  ("CTAG", True, 3), ('CTAG', True, 10)),
+        (2.301527e-04,  4.344942e+03,  2.748670e-01, -4.147275e+00, -4.520554e+01)
+    ),
+    (
+        (
+            "CCCCTAGGGGATTACCC",
+            ("GATC",  False, 3),
+            ('TAAT',  False, 10),
+            ('AGGGA', True,  5)
+        ),
+        (1.007220e-03,  9.928316e+02,  1.269253e+00, -7.153378e+00, -3.739555e+01)
+    ),
+]
+
+@pytest.mark.parametrize(
+    "args",
+    [i[0] for i in _MODES3],
+    ids = [f'{i}' for i in range(len(_MODES3))]
+)
+def test_mt_complex(args):
+    "test complex melting times"
+    truth = next(i[1] for i in _MODES3 if i[0] == args)
+
+    cnf   = TransitionStats(*args, force = 8.5)
+    out   = cnf.statistics()
+    assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
+
 if __name__ == '__main__':
-    for i in _MODES[9:]:
-        test_mt(*i[:-1])
+    for i in _MODES3[2:]:
+        test_mt_complex(i[0])
