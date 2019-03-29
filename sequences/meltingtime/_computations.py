@@ -2,11 +2,17 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=invalid-name
 "Computing melting times"
-from itertools  import chain, product
-from typing     import Iterator, Tuple, Optional, List, Callable, cast
+from   enum          import Enum
+from   itertools     import chain, product
+from   typing        import Iterator, Tuple, Optional, List, Callable, cast
 import numpy  as np
-from   numpy.linalg import solve as _solve
-from   ._base       import BaseComputations, complement, gccontent, SaltInfo
+from   numpy.linalg  import solve as _solve
+from   ._base        import BaseComputations, complement, gccontent, SaltInfo
+
+class InitialState(Enum):
+    "Compuptation mode of the initial state"
+    stable     = "stable"
+    hybridized = "hybridized"
 
 class Strands:
     "all about strands"
@@ -33,7 +39,17 @@ class Strands:
         self.shift    : int   = shift
         self.density  : float = density
         self.dsbegin  : int   = dsfcn(self.seq, self.opposite)
-        self.dsend    : int   = len(self.seq)-dsfcn(self.seq[::-1], self.opposite[::-1])
+        self.dsend    : int   = self.maxsize-dsfcn(self.seq[::-1], self.opposite[::-1])
+
+    @property
+    def maxsize(self) -> int:
+        "return the strand max size"
+        return len(self.seq)
+
+    @property
+    def dssize(self) -> int:
+        "return the double strand size"
+        return len(self.dsseq)
 
     @property
     def dsseq(self):
@@ -58,9 +74,9 @@ class Strands:
         "return keys for terminal bases"
         start, end = self.dsbegin, self.dsend-2
         seq,   opp = self.seq,     self.opposite
+        yield (start, f'{seq[start:start+2][::-1]}./{opp[start:start+2][::-1]}.')
         if end > start:
             yield (end, f'{opp[end:end+2]}./{seq[end:end+2]}.')
-        yield (start, f'{seq[start:start+2][::-1]}./{opp[start:start+2][::-1]}.')
 
     def danglingends(self) -> Iterator[Tuple[int, str]]:
         "return keys for terminal bases"
@@ -78,13 +94,20 @@ class Strands:
                         self.opposite[ind:ind+2] + '/' + self.seq[ind:ind+2]
                     )
 
-    def dsbases(self) -> Iterator[Tuple[int, str]]:
-        "return keys for the double stranded part of the dna"
+    def dsbases(self, keys) -> Iterator[Tuple[int, str]]:
+        """
+        return keys for the double stranded part of the dna
+
+        Args:
+          * keys: the available terminal missmatch keys. When unavailable,
+          we'll automatically fall back on internal missmatches.
+        """
         start = self.dsbegin
-        if self.opposite[self.dsbegin].lower() != complement(self.seq[self.dsbegin]).lower():
+        bases = [i[1] for i in self.terminalbases()]
+        if bases[0] in keys:
             start += 1
-        stop = self.dsend-1
-        if self.opposite[stop-1].lower() != complement(self.seq[stop-1]).lower():
+        stop  = self.dsend-1
+        if bases[1] in keys:
             stop -= 1
         yield from ((i, self.key(i)) for i in range(start, stop))
 
@@ -104,9 +127,9 @@ class Strands:
         cpy = type(self)("", "")
         cpy.seq      = complement(self.opposite)[::-1]
         cpy.opposite = complement(self.seq)[::-1]
-        cpy.shift    = (self.dsend - len(self.seq)) * (1 if self.shift > 0 else -1)
-        cpy.dsbegin  = len(self.seq)-self.dsend
-        cpy.dsend    = len(self.seq)-self.dsbegin
+        cpy.shift    = (self.dsend - self.maxsize) * (1 if self.shift > 0 else -1)
+        cpy.dsbegin  = self.maxsize-self.dsend
+        cpy.dsend    = self.maxsize-self.dsbegin
         return cpy
 
     def nstates(self, nzipped = -1) -> int:
@@ -116,7 +139,7 @@ class Strands:
         The argument *nzipped* tells how many bases are zipped starting from the
         left: this is the effect of the fork.
         """
-        assert self.dsbegin > 1 and self.dsend < len(self.seq)
+        assert self.dsbegin > 1 and self.dsend < self.maxsize
         nds = max(0, self.dsend - max(nzipped+1, self.dsbegin))
         return (nds*(nds-1))//2+1
 
@@ -137,7 +160,12 @@ class StatesTransitions(BaseComputations):
         self.dtype  = np.dtype('f8')
         self.hpin   = Strands(hpin, opposite = chpin)
         self.oligos = sorted(
-            [self.newstrands(*oligos[i:i+2]) for i in range(0, len(oligos), 2)],
+            [
+                self.newstrands(*i)  if isinstance(i, (list, tuple)) else
+                self.newstrands(**i) if isinstance(i, dict) else
+                self.newstrands(i)
+                for i in oligos
+            ],
             key = lambda x: x.dsbegin
         )
 
@@ -147,12 +175,12 @@ class StatesTransitions(BaseComputations):
         assert test([i for i in self.oligos if i.isoligo])
         assert test([i for i in self.oligos if i.iscoligo])
 
-    def newstrands(self, oligo:str, shift:int) -> Strands:
+    def newstrands(self, oligo:str, seq:bool = False, shift:int = 0) -> Strands:
         "create a new strand"
         return (
-            Strands(seq = self.hpin.seq, opposite = oligo,              shift = shift)
-            if shift <= 0 else
             Strands(seq = oligo,         opposite = self.hpin.opposite, shift = shift)
+            if seq else
+            Strands(seq = self.hpin.seq, opposite = oligo,              shift = shift)
         )
 
     def nstates(self, *masked) -> np.ndarray:
@@ -183,15 +211,16 @@ class StatesTransitions(BaseComputations):
         """
         masked, states = self.__masked_and_states(masked, states)
         trans          = np.zeros((len(states),)*2, dtype = self.dtype)
-        rco            = self.__rco()
         if self.hpin not in masked:
             ioli = 2
             roo  = self.__roo(self.hpin)
+            rco  = self.elasticity.rch(self.temperatures)*np.array([1, -1], dtype = self.dtype)
             self.__addstates(self.__join_hp(states, states[:,1] > 0), roo, rco, trans)
         else:
             ioli = 1
 
         maxs = self.__maxs
+        rco  = self.elasticity.rco(self.temperatures)*np.array([1, -1], dtype = self.dtype)
         for oli in self.oligos:
             if oli in masked:
                 continue
@@ -208,7 +237,12 @@ class StatesTransitions(BaseComputations):
 
         return trans
 
-    def initialstate(self, *masked, states: Optional[np.ndarray] = None, method = 'stablestate'):
+    def initialstate(
+            self,
+            *masked,
+            states: Optional[np.ndarray] = None,
+            method = InitialState.stable.name
+    ):
         """
         Return the initial state.
 
@@ -222,7 +256,7 @@ class StatesTransitions(BaseComputations):
         masked, states = self.__masked_and_states(masked, states)
         return (
             self.__initialstate_full(states, 1) if self.hpin in masked else
-            self.__initialstate_full(states, 2) if method == 'all' else
+            self.__initialstate_full(states, 2) if InitialState(method).name == 'all' else
             self.__initialstate_withhpin_stable(masked, states)
         )
 
@@ -263,21 +297,21 @@ class StatesTransitions(BaseComputations):
             return states[:,1:].max(1) != _OFF
         return states[:,1] != states[:,1].max()
 
-    def statistics(self, *masked, rate = None):
+    def statistics(self, *masked, rate = None, **kwa):
         "all results"
         masked, states = self.__masked_and_states(masked, None)
         available      = self.transitionstates(*masked, states = states)
 
         vect           = (
-            self.compute(*masked, states = states, available = available)
+            self.compute(*masked, states = states, available = available, **kwa)
             * (rate if rate is not None else 1e-6 if self.hpin in masked else 2.8e-6)
         )
 
-        def _info(key:int, strand: Strands) -> Tuple[float, float, float]:
-            temp, delta = self.__saltinfo(strand)[2:]
+        def _info(key:int, strands: Strands) -> Tuple[float, float, float]:
+            temp, delta = self.__saltinfo(strands)[2:]
             good        = states[available, key+1+ (self.hpin not in masked)] != _OFF
             cnt         = vect[available][good].sum()
-            return temp, self.cor*delta+((len(strand.seq)-1)*(self.gss-self.gds)), cnt
+            return temp, self.cor*delta+(strands.dssize-1)*(self.gss-self.gds), cnt
 
         info = np.array([
             _info(i, j)
@@ -370,13 +404,13 @@ class StatesTransitions(BaseComputations):
                 delta += tmp
 
         # inside bases
-        for _, key in strands.dsbases():
+        for _, key in strands.dsbases(self.table):
             delta += self.table[key]
         return delta
 
     def __dgperbase(self, strands:Strands) -> np.ndarray:
         "compute the dg"
-        denthalpy = np.zeros(len(strands.seq), dtype = self.dtype)
+        denthalpy = np.zeros(strands.maxsize, dtype = self.dtype)
 
         # Terminal endings
         for i, key in strands.terminalbases():
@@ -389,7 +423,7 @@ class StatesTransitions(BaseComputations):
             denthalpy[i] += dgt0*(strands.seq[i+j] in 'AaTt')
 
         # inside bases
-        for i, key in strands.dsbases():
+        for i, key in strands.dsbases(self.table):
             denthalpy[i] += self.dgcor(self.table[key])
 
         # We compute salt correction for the hybridized oligo that is with
@@ -402,7 +436,7 @@ class StatesTransitions(BaseComputations):
         "create the roo vector"
         sli        = slice(strands.dsbegin, strands.dsend-1)
 
-        roo        = np.zeros((len(strands.seq),2), dtype = self.dtype)
+        roo        = np.zeros((strands.maxsize,2), dtype = self.dtype)
         roo[sli,0] = -self.__dgperbase(strands)[sli]
 
         dgt0       = self.dgcor(self.table['init_A/T'] - self.table['init_G/C'])
@@ -414,10 +448,6 @@ class StatesTransitions(BaseComputations):
         roo[sli,1] += roo[sli,0]-self.dgcor(self.table['init_G/C'])
         roo[sli,:]  = np.exp(roo[sli,:])
         return np.kron(roo, [-1., 1.]).reshape((-1, 2, 2))
-
-    def __rco(self):
-        "return closing factors"
-        return self.elasticity.rco(self.temperatures)*np.array([1., -1.], dtype = self.dtype)
 
     @classmethod
     def __join(
@@ -436,6 +466,7 @@ class StatesTransitions(BaseComputations):
         out  = np.frombuffer(states[ison, :][:, keys][good], dtype = _JOIN_DT)
         out['states']['iopen']       = states[inds, :][:,0]
         out[['canclose', 'canopen']] = True
+        out['islast']                = False
         return out
 
     @classmethod
@@ -445,7 +476,6 @@ class StatesTransitions(BaseComputations):
         aopened[aopened[:,0] == 1, 0] = 0 # require 2 bases to hold the hp
 
         out            = cls.__join(states, aopened, ison, 1)
-        out['islast']  = out['base'] <= 3
         out['canopen'] = (out['base'] > 2) & (out['base'] < states[:,1].max())
         out['base']    = np.maximum(out['base']-2, 0)
         return out
@@ -519,7 +549,7 @@ class StatesTransitions(BaseComputations):
 
     @property
     def __maxs(self) -> int:
-        return 10**(int(np.round(np.log10(len(self.hpin.seq))))+1)
+        return 10**(int(np.round(np.log10(self.hpin.maxsize)))+1)
 
     def __masked_and_states(
             self,
@@ -558,7 +588,10 @@ class StatesTransitions(BaseComputations):
         left, right        = self.__frombuffer(*(np.copy(i) for i in (states[:,1:], olstates)))
         maxv               = olstates[:,1:].min(1).ravel()
         maxv[maxv == _OFF] = states[:,1].max()
-        right['f0']        = np.maximum(maxv//self.__maxs-1, 0)
+
+        right['f0']                   = np.maximum(maxv//self.__maxs, 0)
+        right['f0'][right['f0'] == 1] = 0
+
         inds               = np.searchsorted(left, right)
         good               = left[inds] == right
         stable             = None
@@ -570,8 +603,8 @@ class StatesTransitions(BaseComputations):
                 break
             stable /= cnt
 
-        out             = np.zeros(len(states), dtype = self.dtype)
-        out[inds[good]] = stable
+        out       = np.zeros(len(states), dtype = self.dtype)
+        out[inds] = stable
         return out
 
     @staticmethod
