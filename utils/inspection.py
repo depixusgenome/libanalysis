@@ -36,7 +36,6 @@ def templateattribute(cls, index) -> Optional[type]:
             return None
     return orig.__args__[index]    # type: ignore
 
-
 def diffobj(left, right):
     "return a dictionnary of attributes in `left` which differ from `right`"
     if not isinstance(right, type(left)):

@@ -3,13 +3,17 @@
 u"Test utils"
 # pylint: disable=import-error
 # pylint: disable=no-self-use
+from   enum               import Enum
+from   typing             import Generic, TypeVar, Tuple
+from   functools          import partial
 import pathlib
 import pytest
 import numpy as np
-from   utils                import escapenans, fromstream
-from   utils.gui            import intlistsummary, parseints
-from   utils.lazy           import LazyInstError, LazyInstanciator, LazyDict
-from   utils.attrdefaults   import fieldnames, changefields, initdefaults
+from   utils              import escapenans, fromstream
+from   utils.gui          import intlistsummary, parseints
+from   utils.lazy         import LazyInstError, LazyInstanciator, LazyDict
+from   utils.attrdefaults import fieldnames, changefields, initdefaults
+from   utils.inspection   import templateattribute, diffobj, isfunction, ismethod, parametercount
 
 class TestLazy:
     u"test lazy stuff"
@@ -89,6 +93,180 @@ class TestLazy:
             assert lst == ['l1', 'l3', 'l7', 'l4', 'l8']
             assert 'l8' in dico
             lst.clear()
+
+def test_templateattrs():
+    "test template attrs"
+    TVar1 = TypeVar("TVar1")
+    TVar2 = TypeVar("TVar2")
+    class _AClass(Generic[TVar1]):
+        pass
+
+    class _BClass(_AClass[int]):
+        pass
+    assert templateattribute(_BClass, 0) is int
+
+    class _AClass(Generic[TVar1, TVar2]):
+        pass
+    class _BClass(_AClass[int, Tuple[float,...]]): # type: ignore
+        pass
+    assert templateattribute(_BClass, 0) is int
+    assert templateattribute(_BClass, 1) == Tuple[float, ...]
+
+    class _BClass(_AClass[int, TVar2]): # type: ignore
+        pass
+
+    class _CClass(_BClass[float]): # type: ignore
+        pass
+
+    assert templateattribute(_CClass, 0) is float
+    assert templateattribute(_CClass.__base__, 0) is int
+
+def test_diffobj():
+    "test template attrs"
+    # pylint: disable=invalid-name,attribute-defined-outside-init
+    raises = pytest.raises
+    with raises(TypeError):
+        diffobj((), [])
+
+    left  = {'a': 1, 'b': 2, 'c': 3}
+    right = {'a': 1, 'b': 2, 'c': 3}
+    assert diffobj(left, right) == {}
+
+    right['d'] = 1
+    assert diffobj(left, right) == {}
+
+    right.pop('c')
+    with raises(KeyError):
+        diffobj(left, right)
+
+    right['c'] = 2
+    assert diffobj(left, right) == {"c": 3}
+
+    class _AClass:
+        def __init__(self, info):
+            self.__dict__.update(info)
+    right = _AClass(left)
+    left  = _AClass(left)
+    assert diffobj(left, right) == {}
+
+    right.d = 1
+    assert diffobj(left, right) == {}
+
+    del right.c
+    with raises(KeyError):
+        diffobj(left, right)
+
+    right.c = 2
+    assert diffobj(left, right) == {"c": 3}
+
+    class _AClass:
+        def __init__(self, info):
+            self.__dict__.update(info)
+        def __getstate__(self):
+            xx =  dict(self.__dict__)
+            xx.pop('c', None)
+            return xx
+
+    right = _AClass(left.__dict__)
+    left  = _AClass(left.__dict__)
+    assert diffobj(left, right) == {}
+    right.d = 1
+    assert diffobj(left, right) == {}
+    del right.c
+    assert diffobj(left, right) == {}
+    right.c = 2
+    assert diffobj(left, right) == {}
+    right.b = 1
+    assert diffobj(left, right) == {'b': 2}
+
+    class _AClass:
+        def __getstate__(self):
+            return ()
+    with raises(NotImplementedError):
+        diffobj(_AClass(), _AClass())
+
+def test_inspection():
+    "test inspection"
+    def _afcn():
+        pass
+    class _AClass:
+        # pylint: disable=missing-docstring
+        def aaa(self):
+            pass
+        @classmethod
+        def bbb(cls):
+            pass
+        @staticmethod
+        def ccc():
+            pass
+        def __call__(self, _):
+            pass
+
+    fcns = [
+        _afcn, lambda x: None, _AClass.aaa, _AClass().aaa,
+        _AClass.bbb, _AClass().bbb, _AClass.ccc, _AClass().ccc,
+        partial(lambda x: None, 1)
+    ]
+    assert all(isfunction(i) for i in fcns)
+    assert not isfunction(_AClass)
+    assert not isfunction(_AClass())
+
+    assert parametercount(lambda x: None) == 1
+    assert parametercount(lambda x = 1: None) == 0
+    assert parametercount(lambda: None) == 0
+    assert parametercount(lambda x, **y: None) == 1
+    assert parametercount(lambda x = 1, **y: None) == 0
+    assert parametercount(lambda **y: None) == 0
+    assert parametercount(lambda x, *y: None) == 1
+    assert parametercount(lambda x = 1, *y: None) == 0
+    assert parametercount(lambda *y: None) == 0
+
+    assert ismethod(_AClass.aaa)
+    assert not ismethod(_AClass().aaa)
+    assert not ismethod(_AClass().bbb)
+    assert not ismethod(_AClass.ccc)
+    assert not ismethod(_AClass().ccc)
+    assert not ismethod(_AClass.bbb)
+
+def test_attrs():
+    "test default attributes"
+    class _Enum(Enum):
+        aaa = 'aaa'
+        bbb = 'bbb'
+
+    class _AClass:
+        aval: int   = 1
+        bval: list  = [1]
+        cval: _Enum = _Enum("aaa")
+        @initdefaults(frozenset(locals()))
+        def __init__(self, **_):
+            pass
+    assert _AClass().aval == 1
+    assert _AClass().bval == [1]
+    assert _AClass().bval is not _AClass.bval
+    assert _AClass().cval == _Enum('aaa')
+    assert _AClass(aval = 2).aval == 2
+    assert _AClass(cval = 'bbb').cval == _Enum('bbb')
+    bval= [1,2, 3]
+    assert _AClass(bval = bval).bval is bval
+
+    class _BClass(_AClass):
+        aval: int = 3
+    assert _BClass().aval == 3
+
+    class _CClass(_AClass):
+        aval: int = 4
+        dval: tuple = (3, 3)
+        fval: np.ndarray = np.array([3, 3])
+        @initdefaults('dval', 'fval')
+        def __init__(self, **_):
+            super().__init__(**_)
+    assert _CClass().aval == 4
+    assert _CClass().dval == (3, 3)
+    assert _CClass().dval is _CClass.dval
+    assert _CClass().fval is not _CClass.fval
+    assert isinstance(_CClass().fval, np.ndarray)
+    assert list(_CClass().fval) == [3, 3]
 
 def test_escapenans():
     u"tests that we can remove and add nans again"
@@ -257,4 +435,4 @@ def test_intlist():
     assert parseints("10 → 12, 1 → 3, 7 , 6 , 14") == {1,2, 3, 6, 7, 10, 11, 12, 14}
 
 if __name__ == '__main__':
-    test_intlist()
+    test_inspection()
