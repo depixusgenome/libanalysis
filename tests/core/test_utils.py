@@ -10,10 +10,11 @@ import pathlib
 import pytest
 import numpy as np
 from   utils              import escapenans, fromstream
-from   utils.gui          import intlistsummary, parseints
+from   utils.gui          import intlistsummary, parseints, leastcommonkeys
 from   utils.lazy         import LazyInstError, LazyInstanciator, LazyDict
 from   utils.attrdefaults import fieldnames, changefields, initdefaults
 from   utils.inspection   import templateattribute, diffobj, isfunction, ismethod, parametercount
+from   utils.configobject import ConfigObject
 
 class TestLazy:
     u"test lazy stuff"
@@ -93,6 +94,51 @@ class TestLazy:
             assert lst == ['l1', 'l3', 'l7', 'l4', 'l8']
             assert 'l8' in dico
             lst.clear()
+
+def test_configobj():
+    "test  ConfigObject"
+    # pylint: disable=invalid-name,attribute-defined-outside-init
+    left = ConfigObject()
+    left.__dict__.update({'a': 1, 'b': 2, 'c': 3})
+    assert left.config() == {'a': 1, 'b': 2, 'c': 3}
+    right = ConfigObject()
+    right.__dict__.update({'a': 1, 'b': 2, 'c': 3})
+    assert left.diff(right) == {}
+    right.c = 5
+    assert left.diff(right) == {'c': 3}
+
+    class _AClass(ConfigObject):
+        a = 1
+        b = 2
+        def __init__(self, info):
+            self.__dict__.update(info)
+        def __getstate__(self):
+            xx =  dict(self.__dict__)
+            xx.pop('c', None)
+            return xx
+
+    left = _AClass({'a': 1, 'b': 2, 'c': 3})
+    cmap = left.config(1)
+    assert cmap.maps[0] == {}
+    assert cmap.maps[1] == {'a': 1, 'b': 2}
+
+    left = _AClass({'a': 2, 'b': 2})
+    cmap = left.config(1)
+    assert cmap.maps[0] == {'a': 2}
+    assert cmap.maps[1] == {'a': 1, 'b': 2}
+
+    class _AClass(ConfigObject):
+        def __init__(self):
+            self.__dict__.update({'a': 1, 'b': 2, 'c': 3})
+    left = _AClass()
+    cmap = left.config(1)
+    assert cmap.maps[0] == {}
+    assert cmap.maps[1] == {'a': 1, 'b': 2, 'c': 3}
+
+    left.a = 2
+    cmap = left.config(1)
+    assert cmap.maps[0] == {'a': 2}
+    assert cmap.maps[1] == {'a': 1, 'b': 2, 'c': 3}
 
 def test_templateattrs():
     "test template attrs"
@@ -434,5 +480,26 @@ def test_intlist():
     assert parseints("1 → 3, 6, 7, 10 → 12, 14")   == {1,2, 3, 6, 7, 10, 11, 12, 14}
     assert parseints("10 → 12, 1 → 3, 7 , 6 , 14") == {1,2, 3, 6, 7, 10, 11, 12, 14}
 
+def test_leastcommonkeys():
+    "test least common keys"
+    assert leastcommonkeys(["test"]) == {"test" : "test"}
+    assert leastcommonkeys(["te_st"]) == {"te_st" : "te_st"}
+    assert (
+        leastcommonkeys(["a_x1_b2_c2", "a_x2_b2_c1"])
+        == {"a_x1_b2_c2" : "x1_c2", "a_x2_b2_c1": "x2_c1"}
+    )
+    assert (
+        leastcommonkeys(["a1_x1_b2_c2", "a_x1_b2_c1"])
+        == {"a1_x1_b2_c2" : "a1_c2", "a_x1_b2_c1": "a_c1"}
+    )
+    assert (
+        leastcommonkeys(["a1_x1_b2_c1", "a_x1_b2_c1"])
+        == {"a1_x1_b2_c1" : "a1", "a_x1_b2_c1": "a"}
+    )
+    assert (
+        leastcommonkeys(["a1_x1_b2_c2", ""])
+        == {"a1_x1_b2_c2" : "a1_x1_b2_c2", "": "ref"}
+    )
+
 if __name__ == '__main__':
-    test_inspection()
+    test_leastcommonkeys()

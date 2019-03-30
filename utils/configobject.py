@@ -20,14 +20,18 @@ class ConfigObject:
 
     def config(self, tpe = dict):
         "return a chainmap with default and updated values"
+        fcn   = getattr(self, '__getstate__', None)
+        # pylint: disable=not-callable
+        dself = fcn() if callable(fcn) else dict(self.__dict__)
         if tpe in (dict, 'dict'):
-            return dict(self.__dict__)
+            return dself
 
-        get  = lambda i: getattr(i, '__dict__', i)
-        cur  = {i: get(j)                          for i, j in self.__dict__.items()}
-        dflt = {i: get(getattr(self.__class__, i)) for i in self.__dict__}
-        return ChainMap({i: j for i, j in cur.items() if j != dflt[i]}, dflt)
-
+        if all(hasattr(self.__class__, i) for i in dself):
+            other = {i: getattr(self.__class__, i) for i in dself}
+        else:
+            # don't create a new instance unless necessary
+            other = self.__class__().config(dict)
+        return ChainMap(diffobj(dself, other), other)
 
 def bind(ctrl, master, slave):
     """
