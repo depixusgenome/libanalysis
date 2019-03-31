@@ -377,9 +377,12 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         if not self.loop.asyncio_loop.is_running():
             self.loop.start()
 
-    def wait(self, time = 2.):
+    def wait(self, time = 2., rendered = False):
         "wait some more"
-        self.cmd(lambda: None, andwaiting = time)
+        if rendered:
+            self.cmd(lambda: None, andwaiting = time, rendered = True)
+        else:
+            self.cmd(lambda: None, andwaiting = time)
 
     def quit(self):
         "close the view"
