@@ -206,6 +206,7 @@ class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
                         with self.resetting() as inp:
                             inp.update(cache)
             finally:
+                ctrl.display.handle('rendered', args = {'element': self})
                 LOGS.debug(msg[0]+"+%.3f", *msg[1:], time() - start)
 
     def _waitfornextreset(self) -> bool:
