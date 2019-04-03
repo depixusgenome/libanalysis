@@ -157,12 +157,19 @@ class SeleniumAccess:
         self.driver = server.driver
 
     def __getitem__(self, name):
+        if isinstance(name, list):
+            return (self[i] for i in name)
+
+        fcn = f"find_element{'s' if isinstance(name, tuple) and Ellipsis in name else ''}_by_"
+        if 's' in fcn:
+            name = next(i for i in name if i is not Ellipsis)
+
         if name.startswith("#"):
-            return self.driver.find_element_by_id(name[1:])
+            return getattr(self.driver, f"{fcn}id")(name[1:])
         if name.startswith("."):
-            return self.driver.find_element_by_class_name(name[1:])
+            return getattr(self.driver, f"{fcn}class_name")(name[1:])
         if name.startswith("/"):
-            return self.driver.find_element_by_xpath(name)
+            return getattr(self.driver, f"{fcn}xpath")(name)
         raise NotImplementedError()
 
     def click(self, name, wait = True):
@@ -170,6 +177,14 @@ class SeleniumAccess:
         self[name].click()
         if wait:
             self.server.wait()
+
+    def enabled(self, name):
+        "click on a button"
+        return not self[name].is_enabled()
+
+    def classnames(self, name):
+        "click on a button"
+        return self[name].get_attribute("class")
 
     def __setitem__(self, name, value):
         "click on a button"
