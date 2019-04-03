@@ -150,6 +150,42 @@ class WidgetAccess:
             raise KeyError("Could not find "+ self._key)
         return self._docs[0]
 
+class SeleniumAccess:
+    "Access to selenium driver"
+    def __init__(self, server):
+        self.server = server
+        self.driver = server.driver
+
+    def __getitem__(self, name):
+        if name.startswith("#"):
+            return self.driver.find_element_by_id(name[1:])
+        if name.startswith("."):
+            return self.driver.find_element_by_class_name(name[1:])
+        if name.startswith("/"):
+            return self.driver.find_element_by_xpath(name)
+        raise NotImplementedError()
+
+    def click(self, name, wait = True):
+        "click on a button"
+        self[name].click()
+        if wait:
+            self.server.wait()
+
+    def __setitem__(self, name, value):
+        "click on a button"
+        elem = self[name]
+        self.driver.execute_script(f"arguments[0].setAttribute('value', '{value}')", elem)
+
+    def applymodal(self):
+        "click on the modal's apply button"
+        self.click(".dpx-modal-done")
+        self.server.wait()
+
+    def cancelmodal(self):
+        "click on the modal's apply button"
+        self.click(".dpx-modal-cancel")
+        self.server.wait()
+
 class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
     lets us use a current IOLoop with "with"
@@ -367,6 +403,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 
     def __exit__(self, *_):
         if self.server is not None:
+            self.wait()
             self.quit()
         self.__warnings.__exit__(*_)
         if self.driver is not None:
@@ -504,6 +541,12 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         "Returns something to access web elements"
         return WidgetAccess(self.doc)
 
+    @property
+    def selenium(self):
+        "Returns something to access web elements"
+        assert self.driver is not None
+        return SeleniumAccess(self)
+
     STORE = None
     @property
     def savedconfig(self):
@@ -548,11 +591,13 @@ class BokehAction:
             self.server.__enter__()
         return server
 
-    def close(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
         "stop server"
         act, self.server = self.server, None
-        if act is not None:
-            act.__exit__(None, None, None)
+        return act.__exit__(*_) if act is not None else None
 
     def setattr(self, *args, **kwargs):
         "apply monkey patch"
@@ -575,7 +620,5 @@ def bokehaction(monkeypatch):
     be accessed directly, for example BokehAction.view._ctrl  can be accessed
     through BokehAction.ctrl.
     """
-    act = BokehAction(monkeypatch)
-    yield act
-    act.server.wait()
-    act.close()
+    with BokehAction(monkeypatch) as act:
+        yield act
