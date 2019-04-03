@@ -4,6 +4,8 @@
 from   importlib import import_module
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
+from   threading import Thread
+from   functools import partial
 import os
 import tempfile
 import warnings
@@ -176,9 +178,10 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             return setattr(*args)
 
     __warnings: Any
-    __hdl: ErrorHandler
+    __hdl:      ErrorHandler
     def __init__(self, mkpatch, kwa:dict, filters) -> None:
         self.server: Server   = None
+        self.driver: Any      = None
         self.view:   Any      = None
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
@@ -253,11 +256,11 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             from   app.scripting import addload
             from   utils.gui     import storedjavascript
 
-            name = inspect.getouterframes(inspect.currentframe())[2].function
+            name = inspect.getouterframes(inspect.currentframe())[4].function
             addload("view.static", "modaldialog")
             _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
             kwa.setdefault('port', 'random')
-            if self.headless:
+            if self.headless and kwa.get('runtime', '') != 'none':
                 kwa.pop('runtime', None)
             try:
                 server = launch(app, **kwa)
@@ -295,6 +298,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
                 'remote_args',
                 ['--headless']+cls.remote_args
             )
+
         old = getattr(webruntime.BaseRuntime, '_start_subprocess')
         def _start_subprocess(self, cmd, shell=False, **env):
             return old(self, cmd+['--headless'], shell, **env)
@@ -310,16 +314,31 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 
     def __start(self):
         haserr = [False]
+        thread = [self.driver is not None, None]
+        first  = [True]
         def _start(time = process_time()):
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
                 setattr(self.ctrl, 'CATCHERROR', False)
-                self.loop.call_later(2., self.loop.stop)
+
+                root = next(i for i in self.doc.roots if hasattr(i, 'keycontrol'))
+                if root.keycontrol:
+                    assert first[0]
+                    first[0] = False
+                    self.doc.add_next_tick_callback(lambda: setattr(root, 'keycontrol', False))
+                    self.loop.call_later(0.5, _start)
+                else:
+                    self.loop.call_later(2., self.loop.stop)
             elif process_time()-time > 20:
                 haserr[0] = True
                 self.loop.stop()
             else:
+                if thread[0]:
+                    fcn       = partial(self.driver.get, f"http://localhost:{self.server.port}")
+                    thread[0] = False
+                    thread[1] = Thread(target = fcn)
+                    thread[1].start()
                 LOGS.debug("waiting %s", process_time()-time)
                 self.loop.call_later(0.5, _start)
         _start()
@@ -328,12 +347,21 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.loop.start()
         assert len(self.__hdl.lst) == 0, "gui construction failed"
         assert not haserr[0], "could not start gui"
+        if thread[1] is not None:
+            thread[1].join()
 
     def __enter__(self):
         self.__set_display()
         self.__set_handler()
         self.__set_warnings()
-        self.server = self.__buildserver(self.kwa)
+        kwa    = dict(self.kwa)
+        if kwa.get('runtime', '') == 'selenium':
+            kwa.update(runtime = 'none')
+            from selenium.webdriver import Firefox
+            self.driver = Firefox()
+            self.driver.headless = self.headless
+
+        self.server = self.__buildserver(kwa)
         self.__start()
         return self
 
@@ -341,6 +369,9 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         if self.server is not None:
             self.quit()
         self.__warnings.__exit__(*_)
+        if self.driver is not None:
+            self.driver.quit()
+            self.driver = None
 
         for _1, j  in iterloggers():
             j.removeHandler(self.__hdl)

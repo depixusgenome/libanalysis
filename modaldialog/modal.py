@@ -258,6 +258,7 @@ class DpxModal(Model):
     results            = props.Dict(props.String, props.Any)
     submitted          = props.Int(0)
     startdisplay       = props.Int(0)
+    keycontrol         = props.Bool(True)
     callback           = props.Instance(Callback)
     def __init__(self, **kwa):
         super().__init__(**kwa)

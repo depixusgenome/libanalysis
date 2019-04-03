@@ -417,6 +417,7 @@ export class DpxModal       extends Model
 
     _startdisplaymodal: () ->
         mdl     = new DpxModalDialogView({model: @})
+        mdl.keyControl = @keycontrol
         mdl.$el = $(mdl.el)
         $('.dpx-modal-div').html(mdl.render().el)
 
@@ -427,5 +428,6 @@ export class DpxModal       extends Model
         results:      [p.Any,    {}]
         submitted:    [p.Number, 0]
         startdisplay: [p.Number, 0]
+        keycontrol:   [p.Bool,   true]
         callback:     [p.Instance]
     }
