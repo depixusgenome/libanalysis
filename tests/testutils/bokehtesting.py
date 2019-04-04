@@ -408,9 +408,10 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         kwa    = dict(self.kwa)
         if kwa.get('runtime', '') == 'selenium':
             kwa.update(runtime = 'none')
-            from selenium.webdriver import Firefox
-            self.driver = Firefox()
-            self.driver.headless = self.headless
+            from selenium.webdriver import Firefox, FirefoxOptions
+            opts          = FirefoxOptions()
+            opts.headless = self.headless
+            self.driver   = Firefox(options = opts)
 
         self.server = self.__buildserver(kwa)
         self.__start()
