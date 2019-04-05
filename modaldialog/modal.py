@@ -247,8 +247,8 @@ class CSVOption(Option):
                     if val is not None else '')
             opt += ' placeholder="comma separated values"'
 
-            attr = self._addtoattr(match.group("attr", ""), "class", 'bk-widget-form-input')
-            if match.group('width', None):
+            attr = self._addtoattr(match.group("attr"), "class", 'bk-widget-form-input')
+            if match.group('width'):
                 attr = self._addtoattr(attr, "style", f'width: {match.group("width")}px;')
 
             inpt = '<input type="text" name="{}" {} {}>'
