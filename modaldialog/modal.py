@@ -256,7 +256,6 @@ class CSVOption(Option):
 
         return self._patt.sub(_replace, body)
 
-KEY_CONTROL = True # for testing purposes
 class DpxModal(Model):
     "Modal dialog"
     _PREC              = r'(?:\.(?P<prec>\d*))?'
