@@ -18,8 +18,8 @@ LOGS  = getLogger()
 
 class Option(metaclass = ABCMeta):
     "Converts a text tag to an html input"
-    NAME = r'%\((?P<name>[\w\.\[\]]*)\)'
-    _cnv = None
+    NAME  = r'%\((?P<name>[\w\.\[\]]*)\s*(?:{\s*(?P<attr>[^{}]*?)?\s*}\s*)?\)'
+    _cnv  = None
     @abstractmethod
     def replace(self, model, body:str) -> str:
         "replaces a pattern by an html tag"
@@ -29,6 +29,18 @@ class Option(metaclass = ABCMeta):
     def converter(self, model, body:str) -> Callable:
         "returns a method which sets values in a model"
         raise NotImplementedError()
+
+    @classmethod
+    def _addtoattr(cls, current, key, value):
+        if not current:
+            return f"{key}='{value}'"
+        if key not in current:
+            return f"{current} {key}='{value}'"
+        return re.sub(
+            fr'({key})\s*=\s*(["\'])',
+            lambda x: f'{x.group(1)}={x.group(2)}{value}',
+            current
+        )
 
     def _default_empty(self, elems, model, key):
         if elems[key]:
@@ -101,7 +113,7 @@ class Option(metaclass = ABCMeta):
 
 class ChoiceOption(Option):
     "Converts a text tag to an html check"
-    _PATT = re.compile(r'%\((?P<name>[\w\.\[\]]*)\)(?P<cols>(?:\|\w+\:[^|{}<>]+)*)\|')
+    _PATT = re.compile(Option.NAME+r'(?P<cols>(?:\|\w+\:[^|{}<>]+)*)\|')
     def converter(self, model, body:str) -> Callable:
         "returns a method which sets values in a model"
         elems = frozenset(i.group('name') for i in self._PATT.finditer(body))
@@ -111,8 +123,9 @@ class ChoiceOption(Option):
         "replaces a pattern by an html tag"
         def _replace(match):
             key   = match.group('name')
+            attr  = match.group('attr') or ''
             ident = key+str(random.randint(0,100000))
-            out   = '<select name="{}" id="{}">'.format(key, ident)
+            out   = '<select name="{}" id="{}" {}>'.format(key, ident, attr)
             val   = ''
             for i in match.group('cols')[1:].split("|"):
                 val = self.getvalue(model, key, i.split(":")[0])
@@ -144,12 +157,15 @@ class CheckOption(Option):
     def replace(self, model, body:str) -> str:
         "replaces a pattern by an html tag"
         def _replace(match):
-            key = match.group('name')
+            key  = match.group('name')
+            attr = self._addtoattr(
+                match.group("attr"),
+                "class",
+                "bk-bs-checkbox bk-widget-form-input"
+            )
             assert len(key), "keys must have a name"
             val = 'checked' if bool(self.getvalue(model, key, False)) else ''
-            return ('<input type="checkbox" class="bk-bs-checkbox '
-                    'bk-widget-form-input" name="{}" {} />'
-                    .format(key, val))
+            return '<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
 
         return self._PATT.sub(_replace, body)
 
@@ -176,11 +192,14 @@ class TextOption(Option):
                 opt += " min=0"
 
             opt += self.__value(model, key, info)
-            if info.get('width', None):
-                opt += f' style="width: {info["width"]}px;"'
 
-            inpt = '<input class="bk-widget-form-input" type="{}" name="{}" {}>'
-            return inpt.format(tpe, key, opt)
+            attr  = info.get('attr', '') or ''
+            if info.get('width', None):
+                attr = self._addtoattr(attr, "style", f'width: {info["width"]}px;')
+            attr = self._addtoattr(attr, "class", 'bk-widget-form-input')
+
+            inpt = '<input type="{}" name="{}" {} {}>'
+            return inpt.format(tpe, key, opt, attr)
 
         tpe = 'text' if self._cnv is str else 'number'
         fcn = lambda i: _replace(i.groupdict(), tpe)
@@ -227,14 +246,17 @@ class CSVOption(Option):
             opt  = (' value="{}"'.format(', '.join(str(i) for i in val))
                     if val is not None else '')
             opt += ' placeholder="comma separated values"'
-            if match.group('width'):
-                opt += f' style="width: {match.group("width")}px;"'
 
-            inpt = '<input class="bk-widget-form-input" type="text" name="{}" {}>'
-            return inpt.format(key, opt)
+            attr = self._addtoattr(match.group("attr", ""), "class", 'bk-widget-form-input')
+            if match.group('width', None):
+                attr = self._addtoattr(attr, "style", f'width: {match.group("width")}px;')
+
+            inpt = '<input type="text" name="{}" {} {}>'
+            return inpt.format(key, opt, attr)
 
         return self._patt.sub(_replace, body)
 
+KEY_CONTROL = True # for testing purposes
 class DpxModal(Model):
     "Modal dialog"
     _PREC              = r'(?:\.(?P<prec>\d*))?'
