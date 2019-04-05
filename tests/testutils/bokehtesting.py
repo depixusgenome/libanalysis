@@ -150,6 +150,35 @@ class WidgetAccess:
             raise KeyError("Could not find "+ self._key)
         return self._docs[0]
 
+class ModalAccess:
+    "Access to selenium driver"
+    def __init__(self, driver: 'SeleniumAccess', btn: str, done = False):
+        self.driver = driver
+        self.cancel = not done
+        self.btn    = btn
+
+    def close(self, done = None):
+        "click on the modal's apply button"
+        if done is None:
+            done = not self.cancel
+
+        self.driver.click(f".dpx-modal-{'done' if done else 'cancel'}")
+
+    def open(self, btn = None):
+        "starts the modal dialog"
+        self.driver.click(btn if btn else self.btn)
+
+    def click(self, btn: Optional[str] = None, done: Optional[bool] = None):
+        "opens and closes the dialog"
+        self.open(btn)
+        self.close(done)
+
+    def __enter__(self):
+        self.open()
+
+    def __exit__(self, *_):
+        self.close()
+
 class SeleniumAccess:
     "Access to selenium driver"
     def __init__(self, server):
@@ -172,6 +201,10 @@ class SeleniumAccess:
             return getattr(self.driver, f"{fcn}xpath")(name)
         raise NotImplementedError()
 
+    def modal(self, btn: str, done: bool = True) -> ModalAccess:
+        "return a ModalAccess"
+        return ModalAccess(self, btn, done)
+
     def click(self, name, wait = True):
         "click on a button"
         self[name].click()
@@ -190,16 +223,6 @@ class SeleniumAccess:
         "click on a button"
         elem = self[name]
         self.driver.execute_script(f"arguments[0].setAttribute('value', '{value}')", elem)
-
-    def applymodal(self):
-        "click on the modal's apply button"
-        self.click(".dpx-modal-done")
-        self.server.wait()
-
-    def cancelmodal(self):
-        "click on the modal's apply button"
-        self.click(".dpx-modal-cancel")
-        self.server.wait()
 
 class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
