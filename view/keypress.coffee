@@ -15,7 +15,7 @@ export class DpxKeyEvent extends Model
         val = ""
         for name, kw of {alt: 'Alt'; shift: 'Shift'; ctrl: 'Control'; meta: 'Meta'}
             if evt[name+'Key']
-                 val += "#{kw}-"
+                val += "#{kw}-"
         val = if val == (evt.key+'-') then evt.key else val + evt.key
         if val in @keys
             evt.preventDefault()
