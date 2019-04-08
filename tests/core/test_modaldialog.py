@@ -354,8 +354,9 @@ def test_build():
             aaa     %(aaa)s   %(bbb)s
             bbb               %(bbb)s
 
-            ccc     %(bbb)s
-            ddd     %(bbb)s
+            ### AAA     YYY
+            ccc         %(bbb)s
+            ddd         %(bbb)s
         """,
         "Third",
         """
@@ -372,9 +373,13 @@ def test_build():
             </tr>
         </table>
         <table>
-            <tr style="height:20px">
+            <tr style="height:20px;">
                 <td></td>
                 <td></td>
+            </tr>
+            <tr style="font-style:italic;font-weight:bold;">
+                <td>AAA</td>
+                <td style="font-style:italic;font-weight:normal;">YYY</td>
             </tr>
             <tr >
                 <td>ccc</td>
@@ -389,4 +394,4 @@ def test_build():
     )
 
 if __name__ == '__main__':
-    test_build()
+    test_csv()

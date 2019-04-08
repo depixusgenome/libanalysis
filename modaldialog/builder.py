@@ -11,11 +11,13 @@ LOGS   = getLogger(__name__)
 
 class BodyParser:
     "Builds the modal dialog's body"
-    _HEIGHT = '!height:20px!'
     _SPLIT  = re.compile(r"\s\s+")
     _ARG    = re.compile(r"%\(((?:[^[\].]*?|(?:\[\d+\])?|\.?)+)\)\.?(\d+)?([dfs])?")
     _STYLE  = re.compile(r"^(.*?)!([^!]*)!$")
     _ELEM   = re.compile(r"(\w+)(?:(\[\d+\]))?")
+    _SEP    = '!height:20px;!'
+    _ROWT   = '!font-style:italic;font-weight:bold;!'
+    _COLT   = '!font-style:italic;font-weight:normal;!'
     @classmethod
     def tohtml(cls, body, model, default) -> Dict[str, Optional[str]]:
         "creates the dialog's body"
@@ -30,10 +32,14 @@ class BodyParser:
         for i in tmp:
             if found and not i:
                 continue
+            elif i.startswith("### "):
+                found = False
+                elems = cls._SPLIT.split(i)
+                i     = elems[0][4:]+cls._ROWT+"  "+'  '.join(j+cls._COLT for j in elems[1:])
             elif i.startswith("#"):
                 found = True
             elif not (found or i):
-                i     = cls._HEIGHT
+                i     = cls._SEP
                 found = True
             else:
                 found = False
@@ -127,7 +133,11 @@ class BodyParser:
 
     @classmethod
     def __parseargs(cls, model, default, body: List[str]) -> List[List[str]]:
-        body    = [j if j else cls._HEIGHT for j in body if not j.startswith("#")]
+        body    = [
+            j if j else cls._SEP
+            for j in body
+            if not (j.startswith("# ") or j.startswith("## "))
+        ]
 
         out     = [cls._SPLIT.split(j) for j in body]
         for lst in out:
@@ -142,7 +152,7 @@ class BodyParser:
     def __table(cls, out: List[List[str]]) -> str:
         tables: List[List[List[str]]] = [[]]
         for i in out:
-            if i == [cls._HEIGHT]:
+            if i == [cls._SEP]:
                 tables.append([])
             tables[-1].append(i)
 
