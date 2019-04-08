@@ -225,6 +225,23 @@ def test_mt_complex(args):
     out   = cnf.statistics()
     assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
 
+def test_repr_hpin():
+    "test_repr_hpin"
+    cnf = TransitionStats(*_MODES3[-1][0], force = 8.5)
+    out = [i.strip() for i in str(cnf.strands).strip().split('\n')[1:]]
+    truth = [
+        i.strip()
+        for i in """
+            hairpin: CCCCTAGGGGATTACCC
+            -     0: ...GATC..........
+            -     2: ..........TAAT...
+            +     1: .....AGGGA.......
+                     GGGGATCCCCTAATGGG
+        """.strip().split('\n')
+    ]
+
+    assert out == truth
+
+
 if __name__ == '__main__':
-    for i in _MODES3[2:]:
-        test_mt_complex(i[0])
+    test_repr_hpin()

@@ -1,14 +1,69 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # pylint: disable=invalid-name
-"Computing melting times"
+"""
+Computing melting temperature, Kon and Koff
+
+The computations rely on a Markov model. Each state is a combination of bound
+*double* pairs of bases. This means nucleotides are always *bound* by at least
+NpN bases, meaning 4 bases in all. These 4 bases may include one miss-match.
+Two missmatches is a program error. For each 4 bases, an enthalpy and an
+enthropy is computed depending on their proximity to the edges and their
+composition.
+
+The fork effect is simulated by simply considering that the 5' end of the
+hairpin is always hybridized. There are thus 1/2 as many states available for
+the hairpin as there are for other pairs of oligos (which can dehybridize from
+both ends).
+
+Transitions are computed considering the enthalpy/enthropy delta betwen the
+current state and a state where one more base is either hybridized or
+dehybridized. Thus states accessible directly from a given state are only those
+with a single difference in the hybridized base pairs.
+
+Enthalpies and enthropies are provided in the module *._data*. Values are
+available for:
+
+* DNA-DNA pairs of bases withouth missmatch. Keys are 'WX/YZ' with WX on the 5'
+end. The letters must be upper-case.
+* DNA-DNA pairs of bases with internal missmatch. Keys are 'WX/YZ' with WX on the 5'
+end. The letters must be upper-case.
+* DNA-DNA pairs of bases with terminal missmatch. Keys are 'WX./YZ.' with WX on the 5'
+end. The letters must be upper-case.
+* The same for LNA-DNA and LNA-LNA, the LNA being marked with a lower case letter.
+* The same for RNA-DNA and RNA-RNA, format unknown.
+
+The information for oligo and hairpint sequences should be provided in
+upper-case for DNA bases and lower-case for LNA.
+
+An example:
+```python
+    cnf = TransitionStats(
+        "CCCCTAGGGGATTACCC",  # hairpin 5'->3' sequence
+        ("GATC",  False, 3),  # bind an oligo to the 5' strand at 3 bases from the start
+        ('TAAT',  False, 10), # bind an oligo to the 5' strand at 10 bases from the start
+        ('AGGGA', True,  5),  # bind an oligo to the 3' strand at 5 bases from the start
+        force = 8.5           # force exerted on the hairpin
+    )
+
+    cnf.statistics()   #  -->  trep, koff, kon, dgf melting T°
+
+    assert str(cnf.strands) == \"\"\"
+        hairpin: CCCCTAGGGGATTACCC
+        -     0: ...GATC..........
+        -     2: ..........TAAT...
+        +     1: .....AGGGA.......
+                 GGGGATCCCCTAATGGG
+    \"\"\"
+```
+"""
 from   enum          import Enum
 from   itertools     import chain, product
 from   typing        import Iterator, Tuple, Optional, List, Callable, cast
+import re
 import numpy  as np
 from   numpy.linalg  import solve as _solve
 from   ._base        import BaseComputations, complement, gccontent, SaltInfo
-
 def _frombuffer(*buffers):
     return (
         np.frombuffer(
@@ -244,13 +299,16 @@ class StrandList:
             return states[:,1:].max(1) != _OFF
         return states[:,1] != states[:,1].max()
 
-    def __repr__(self):
-        hpin = f"hairpin: {self.hpin.seq}\n         {self.hpin.opposite}"
-        ols  = "\n".join(
-            f"{i: 7d}: {j.seq}\n         {j.opposite}"
-            for i, j in enumerate(self.oligos)
-        )
-        return f"{super().__repr__()}\n{hpin}\n{ols}"
+    def __str__(self):
+        seqs = f"hairpin: {self.hpin.seq}"
+        opps = ""
+        for i, j in enumerate(self.oligos):
+            if '.' in j.seq:
+                opps +=  f"\n-{i: 6d}: {j.seq}"
+            else:
+                seqs +=  f"\n+{i: 6d}: {j.opposite}"
+        return f"{super().__str__()}\n{seqs}{opps}\n         {self.hpin.opposite}"
+
 
     def __index_info(
             self,
@@ -526,8 +584,13 @@ class TransitionMatrix:
             if inds['canopen']:
                 trans[lst, lst[0]] += roo[inds['base'], inds['islast'], :]
 
+_DOC = __doc__
 class TransitionStats(TransitionMatrix):
-    "compute transition stats for complex states"
+    """
+    Compute transition stats for complex states
+    """
+    if __doc__:
+        __doc__ = _DOC
     def initialstate(
             self,
             *masked,
@@ -643,3 +706,28 @@ class TransitionStats(TransitionMatrix):
         out       = np.zeros(len(states), dtype = self.dtype)
         out[inds] = stable
         return out
+
+def configuration(*seqs, **kwa) -> TransitionStats:
+    """
+    Create a TransitionStats:
+
+    Arguments:
+
+    * starting with a '+5' is an oligo binding to the 5' strand
+    * starting with a '+3' is an oligo binding to the 3' strand
+    * following the '+5' or '+3' must come a number indicating the position relative to the hairpin
+    * if no number or '+-' are indicated, this is expected to be the hairpin's 5' (then 3') sequence
+    """
+    hpin   = None
+    chpin  = None
+    oligos: list = []
+    match  = re.compile(r"+([53])(\d+)(.*)").match
+    for arg in seqs:
+        temp = match(arg)
+        if temp:
+            oligos.append((temp.group(3), temp.group(1) == '5', int(temp.group(2))))
+        elif arg[0] == '5' or hpin is None:
+            hpin = arg[1:]
+        elif arg[0] == '3' or hpin is not None:
+            chpin = arg[1:]
+    return TransitionStats(hpin, *oligos, chpin = chpin, **kwa)
