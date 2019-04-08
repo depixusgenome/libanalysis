@@ -11,7 +11,7 @@ from bokeh.models        import Panel, Spacer, Tabs
 from utils.inspection    import templateattribute
 from model.plots         import PlotState
 from modaldialog         import dialog
-from modaldialog.view    import AdvancedTab
+from modaldialog.builder import changelog
 from view.base           import BokehView
 from version             import timestamp as _timestamp
 
@@ -43,24 +43,8 @@ class TabsTheme:
 
         path /= cls.CHANGELOG
         with open(path, "r", encoding="utf-8") as stream:
-            head = '<h2 id="'+name.lower().split('_')[0].replace('app', '')
-            line = ""
-            for line in stream:
-                if line.startswith(head):
-                    break
-            else:
-                return None
-
-            newtab = lambda x: AdvancedTab(x.split('>')[1].split('<')[0].split('_')[1])
-            tabs   = [newtab(line)]
-            for line in stream:
-                if line.startswith('<h2'):
-                    tabs.append(newtab(line))
-                elif line.startswith('<h1'):
-                    break
-                else:
-                    tabs[-1].body += line # type: ignore
-        return tabs
+            return changelog(stream, name)
+        return None
 
 TThemeType = TypeVar("TThemeType", bound = TabsTheme)
 class TabsView(Generic[TThemeType], BokehView):

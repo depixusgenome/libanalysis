@@ -4,6 +4,7 @@
 Test the modal dialog
 """
 from contextlib import contextmanager
+from io         import StringIO
 import re
 import warnings
 with warnings.catch_warnings():
@@ -393,5 +394,168 @@ def test_build():
         """
     )
 
+def test_changelog():
+    "test changelog"
+    text = """
+        <!DOCTYPE html>
+        <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="generator" content="pandoc" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+          <title>CHANGELOG</title>
+          <style type="text/css">
+              code{white-space: pre-wrap;}
+              span.smallcaps{font-variant: small-caps;}
+              span.underline{text-decoration: underline;}
+              div.column{display: inline-block; vertical-align: top; width: 50%;}
+          </style>
+          <!--[if lt IE 9]>
+            <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+          <![endif]-->
+        </head>
+        <body>
+        <nav id="TOC">
+        <ul>
+        <li><a href="#cycleapp">CycleApp</a><ul>
+        <li><a href="#cycles_v6.6">cycles_v6.6</a><ul>
+        <li><a href="#oligos">Oligos</a></li>
+        </ul></li>
+        <li><a href="#cycles_v6.5">cycles_v6.5</a><ul>
+        <li><a href="#peaks">Peaks</a></li>
+        <li><a href="#consensus">Consensus</a></li>
+        </ul></li>
+        <li><a href="#rampapp">RampApp</a><ul>
+        <li><a href="#ramp_v2.0">ramp_v2.0</a></li>
+        <li><a href="#ramp_v1.3">ramp_v1.3</a></li>
+        <li><a href="#ramp_v1.2">ramp_v1.2</a></li>
+        </ul></li>
+        </ul>
+        </nav>
+        <h1 id="cycleapp">CycleApp</h1>
+        <h2 id="cycles_v6.6">cycles_v6.6</h2>
+        <ul>
+        <li>2019-02-25 15:41:46 +0100 (tag: cycles_v6.6.5)</li>
+        <li>2019-02-08 08:41:46 +0100 (tag: cycles_v6.6.4)</li>
+        <li>2019-02-06 14:30:24 +0100 (tag: cycles_v6.6.3)</li>
+        <li>2019-02-06 11:11:46 +0100 (tag: cycles_v6.6.2)</li>
+        <li>2019-02-06 09:34:19 +0100 (tag: cycles_v6.6.1)</li>
+        <li>2019-02-05 15:54:58 +0100 (tag: cycles_v6.6)</li>
+        </ul>
+        <h3 id="oligos">Oligos</h3>
+        <p>Bindings on the forward (backward) strand can be selected on an oligo basis by prefixing the oligo with + (-).</p>
+        <h2 id="cycles_v6.5">cycles_v6.5</h2>
+        <ul>
+        <li>2018-12-21 11:58:19 +0100 (tag: cycles_v6.5)</li>
+        </ul>
+        <h3 id="peaks">Peaks</h3>
+        <p>In the table, the <em>Strand</em> column now reports the binding orientation as as well the sequence around either the theoretical position or the experimental position when no theoretical position was found. The sequence is marked in bold for bindings on the positive strand and italic bold for the negative strand.</p>
+        <h3 id="consensus">Consensus</h3>
+        <p>The goal of this <strong>new</strong> tab is to show a consensus on all beads attached to the current hairpin. If none has been indicated, the tab is of lesser interest.</p>
+        <h2 id="cycles_v6.4">cycles_v6.4</h2>
+        <ul>
+        <li>2018-12-13 10:58:19 +0100 (tag: cycles_v6.4.1)</li>
+        <li>2018-12-12 22:38:58 +0100 (tag: cycles_v6.4)</li>
+        </ul>
+        <h3 id="hairpin-groups">Hairpin Groups</h3>
+        <p>This new tab displays multiple beads at a time. There are 3 plots:</p>
+        <ul>
+        <li>A scatter plot displays beads on the x-axis and hybridisation positions on the y-axis.</li>
+        <li>The two histograms display durations and rates of selected hybridization positions. The user can select positions graphically using the scatter plot. This will update the histograms.</li>
+        </ul>
+        <p>Beads displayed are:</p>
+        <ul>
+        <li>the current bead,</li>
+        <li>all beads which were affected to the currently selected hairpin,</li>
+        <li>unless the user discarded them from the display (2nd input box on the left).</li>
+        </ul>
+        <p>Computations are run in the background using 2 cores. Beads will appear automatically once computed. To disable this, go to the advanced menu and set the number of cores to zero.</p>
+        <h3 id="cleaning">Cleaning</h3>
+        <p>Since version 6.3, values in phase 5 which are not between median positions in phase 1 and 3 are discarded. In some situations, this leads to the bead loosing a majority of values. This can happen with the SDI when there are phase jumps in the tracking algorithm. The cleaning tab will now report such situations.</p>
+        <h1 id="rampapp">RampApp</h1>
+        <h2 id="ramp_v2.0">ramp_v2.0</h2>
+        <ul>
+        <li>2018-11-08 15:11:56 +0100 (tag: ramp_v2.0, tag: cycles_v6.0)</li>
+        </ul>
+        <p>Refactored completely the gui. The latter is architectured as follows:</p>
+        <table style="border: 1px solid black">
+        <tr>
+        <td>
+        <table>
+        <tr>
+        <td style="border-bottom: 1px solid black">
+        <b>Filters</b>: bead quality
+        </td>
+        </tr>
+        <tr>
+        <td style="border-bottom: 1px solid black">
+        <b>Choice</b>: the type of plots
+        </td>
+        </tr>
+        <tr>
+        <td style="border-bottom: 1px solid black">
+        <b>Table</b>: status summary
+        </td>
+        </tr>
+        <tr>
+        <td style="border-bottom: 1px solid black">
+        <b>Slider &amp; Table</b>: beads clustered by size
+        </td>
+        </tr>
+        <tr>
+        <td style="border-bottom: 1px solid black">
+        <b>Slider</b>: providing the average amount of opened hairpins per choice of Z magnet
+        </td>
+        </tr>
+        <tr>
+        <td>
+        <b>Table</b>: bead opening amount per Z magnet
+        </td>
+        </tr>
+        </table>
+        </td>
+        <td style="border-left: 1px solid black">
+        <p><b>Graphic</b>:</p>
+        <ul>
+        <li>Raw data for a single bead.</li>
+        <li>Average behavior for the current bead and an average behavior of all <em>good</em> beads, with their length renormalized to 100.</li>
+        <li>Average behavior for the current bead and an average behavior of all <em>good</em> beads, both without length renormalization.</li>
+        </ul>
+        </td>
+        </tr>
+        </table>
+        <p>In particular the amount of opening is very different from the previous version. Instead of a number of closed beads, it’s the median amount of DNA bases which remain unaccessible because the of beads still being partially opened. This median amount is over all cycles, irrespective of the beads it belongs to. Such a computation is hoped to be more robust than the previous one, especially given the usually low number of cycles available.</p>
+        <p>Average behaviors are computed for each bead by:</p>
+        <ol type="1">
+        <li>subtracting closing hysteresis (phases … → 3) from the opening hysteresis (phases 3 → …)</li>
+        <li>considering the 25th and 75th percentiles at every available Zmag.</li>
+        </ol>
+        <p>The average behavior for all beads is the median across <em>good</em> beads of the 25th and 75th percentile.</p>
+        <h2 id="ramp_v1.3">ramp_v1.3</h2>
+        <ul>
+        <li>2017-03-07 11:30:13 +0100 (tag: ramp_v1.3)</li>
+        </ul>
+        <p>User has now access to a slider (top-right) which allows to specify the ratio of cycles which the algorithm defines as correct to tag a bead as “good”.</p>
+        <p>Note that the 2 first cycles of the track file are still automatically discarded (as in pias)</p>
+        <h2 id="ramp_v1.2">ramp_v1.2</h2>
+        <ul>
+        <li>2017-02-22 09:00:37 +0100 (tag: ramp_v1.2)</li>
+        <li>2017-02-09 16:43:47 +0100 (tag: ramp_v1.1.1)</li>
+        <li><p>2017-01-24 11:11:11 +0100 (tag: ramp_v1.0.1)</p></li>
+        <li>Definition of a good bead has changed: For a given bead, if less than 20% of cycles do not open and close has expected the bead is tagged good. Earlier versions of rampapp discarded a bead as soon as one of its cycle misbehaved.</li>
+        <li>creates a local server: once open the application runs in your webbrowser, to open another instance of rampapp, copy the address of rampapp (usually: http://localhost:5006/call_display) into a new window</li>
+        <li>generates a ramp_discard.csv file for pias</li>
+        <li><p>added a third graph to display the estimated size of each hairpin in the trk files</p></li>
+        </ul>
+        </body>
+        </html>
+    """.strip().replace("        <", "<")
+
+    out = build.changelog(StringIO(text), "CycleApp")
+    # pylint: disable=line-too-long
+    truth = """<div class='dpx-span'><button type='button' class='bk-bs-btn bk-bs-btn-default bbm-dpx-curbtn' id='bbm-dpx-btn-0' onclick="Bokeh.DpxModal.prototype.clicktab(0)">v6.6</button><button type='button' class='bk-bs-btn bk-bs-btn-default bbm-dpx-btn' id='bbm-dpx-btn-1' onclick="Bokeh.DpxModal.prototype.clicktab(1)">v6.5</button><button type='button' class='bk-bs-btn bk-bs-btn-default bbm-dpx-btn' id='bbm-dpx-btn-2' onclick="Bokeh.DpxModal.prototype.clicktab(2)">v6.4</button></div><div class="bbm-dpx-curtab" id="bbm-dpx-tab-0"><ul>\n<li>2019-02-25 15:41:46 +0100 (tag: cycles_v6.6.5)</li>\n<li>2019-02-08 08:41:46 +0100 (tag: cycles_v6.6.4)</li>\n<li>2019-02-06 14:30:24 +0100 (tag: cycles_v6.6.3)</li>\n<li>2019-02-06 11:11:46 +0100 (tag: cycles_v6.6.2)</li>\n<li>2019-02-06 09:34:19 +0100 (tag: cycles_v6.6.1)</li>\n<li>2019-02-05 15:54:58 +0100 (tag: cycles_v6.6)</li>\n</ul>\n<h3 id="oligos">Oligos</h3>\n<p>Bindings on the forward (backward) strand can be selected on an oligo basis by prefixing the oligo with + (-).</p>\n</div><div class="bbm-dpx-hidden" id="bbm-dpx-tab-1"><ul>\n<li>2018-12-21 11:58:19 +0100 (tag: cycles_v6.5)</li>\n</ul>\n<h3 id="peaks">Peaks</h3>\n<p>In the table, the <em>Strand</em> column now reports the binding orientation as as well the sequence around either the theoretical position or the experimental position when no theoretical position was found. The sequence is marked in bold for bindings on the positive strand and italic bold for the negative strand.</p>\n<h3 id="consensus">Consensus</h3>\n<p>The goal of this <strong>new</strong> tab is to show a consensus on all beads attached to the current hairpin. If none has been indicated, the tab is of lesser interest.</p>\n</div><div class="bbm-dpx-hidden" id="bbm-dpx-tab-2"><ul>\n<li>2018-12-13 10:58:19 +0100 (tag: cycles_v6.4.1)</li>\n<li>2018-12-12 22:38:58 +0100 (tag: cycles_v6.4)</li>\n</ul>\n<h3 id="hairpin-groups">Hairpin Groups</h3>\n<p>This new tab displays multiple beads at a time. There are 3 plots:</p>\n<ul>\n<li>A scatter plot displays beads on the x-axis and hybridisation positions on the y-axis.</li>\n<li>The two histograms display durations and rates of selected hybridization positions. The user can select positions graphically using the scatter plot. This will update the histograms.</li>\n</ul>\n<p>Beads displayed are:</p>\n<ul>\n<li>the current bead,</li>\n<li>all beads which were affected to the currently selected hairpin,</li>\n<li>unless the user discarded them from the display (2nd input box on the left).</li>\n</ul>\n<p>Computations are run in the background using 2 cores. Beads will appear automatically once computed. To disable this, go to the advanced menu and set the number of cores to zero.</p>\n<h3 id="cleaning">Cleaning</h3>\n<p>Since version 6.3, values in phase 5 which are not between median positions in phase 1 and 3 are discarded. In some situations, this leads to the bead loosing a majority of values. This can happen with the SDI when there are phase jumps in the tracking algorithm. The cleaning tab will now report such situations.</p>\n</div>
+    """.strip()
+    assert out == truth
+
 if __name__ == '__main__':
-    test_csv()
+    test_changelog()

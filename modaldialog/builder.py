@@ -3,7 +3,8 @@
 """
 Methods for building modal dialogs
 """
-from   typing  import List, Dict, Tuple, Optional
+from   typing    import List, Dict, Tuple, Optional
+from   typing.io import TextIO # pylint: disable=import-error
 import re
 
 from   utils.logconfig import getLogger
@@ -98,10 +99,10 @@ class BodyParser:
             tabs.append(cls.__totab(lines, model, default))
 
         title = cls.__title(body) if ntitles == 1 else None
-        return title, cls.__jointabs(tabs)
+        return title, cls.jointabs(tabs)
 
     @classmethod
-    def __jointabs(cls, tabs):
+    def jointabs(cls, tabs):
         "return html"
         return (
             (
@@ -194,3 +195,24 @@ class BodyParser:
 def tohtml(body, model, default) -> Dict[str, Optional[str]]:
     "return the title and the body for a modaldialog"
     return BodyParser.tohtml(body, model, default)
+
+def changelog(stream:TextIO, appname:str):
+    "extracts default startup message from a changelog"
+    head = '<h2 id="'+appname.lower().split('_')[0].replace('app', '')
+    line = ""
+    for line in stream:
+        if line.startswith(head):
+            break
+    else:
+        return None
+
+    newtab = lambda x: [x.split('>')[1].split('<')[0].split('_')[1], ""]
+    tabs: List[List[str, str]] = [newtab(line)]  # type: ignore
+    for line in stream:
+        if line.startswith('<h2'):
+            tabs.append(newtab(line))
+        elif line.startswith('<h1'):
+            break
+        else:
+            tabs[-1][-1] += line
+    return BodyParser.jointabs(tabs)
