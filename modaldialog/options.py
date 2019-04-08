@@ -225,7 +225,7 @@ class CSVOption(Option):
     def __init__(self, cnv, patt):
         super().__init__()
         split      = re.compile('[,;:]').split
-        self._cnv  = lambda i: tuple(cnv(j) for j in split(i))
+        self._cnv  = lambda i: tuple(cnv(j) for j in split(i) if j)
         self._patt = re.compile(self.NAME+patt)
         self._mask = (
             r'[\d\.,;:]*'   if patt[-1] == 'f' else
