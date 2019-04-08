@@ -4,10 +4,12 @@
 Test the modal dialog
 """
 from contextlib import contextmanager
+import re
 import warnings
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", ".* from 'collections'.*", DeprecationWarning)
     import modaldialog.options as opts
+    import modaldialog.builder as build
 
 class _Dummy:
     def __init__(self, **kwa):
@@ -273,5 +275,118 @@ def test_choice(monkeypatch):
     assert mdl.first  == 'bbb'
     assert mdl.second == ['bbb']
 
+def test_build():
+    "test builder"
+    obj = _Dummy(aaa = "a", bbb = "b")
+    def _test(txt, title, body):
+        itms = build.tohtml(txt, obj, obj)
+
+        found = ' '.join(re.split(r'\n\s*', itms['body']))
+        truth = (
+            ' '.join(re.split(r'\n\s*', body))
+            .strip()
+            .replace("> <", "><")
+            .replace("> ", ">")
+            .replace(" <", "<")
+            .replace("  ", " ")
+        )
+
+        assert itms['title'] == title
+        assert found         == truth
+
+    body = """
+        <div class=\'dpx-span\'>
+            <button type=\'button\' 
+                    class=\'bk-bs-btn bk-bs-btn-default bbm-dpx-curbtn\'
+                    id=\'bbm-dpx-btn-0\' onclick="Bokeh.DpxModal.prototype.clicktab(0)">
+                Second
+            </button>
+            <button type=\'button\'
+                    class=\'bk-bs-btn bk-bs-btn-default bbm-dpx-btn\'
+                    id=\'bbm-dpx-btn-1\' onclick="Bokeh.DpxModal.prototype.clicktab(1)">
+                Third
+            </button>
+        </div>
+        <div class="bbm-dpx-curtab" id="bbm-dpx-tab-0">
+            <table></table>
+        </div>
+        <div class="bbm-dpx-hidden" id="bbm-dpx-tab-1">
+            <table></table>
+        </div>
+    """
+    _test(
+        """
+            # First
+
+            ## Second
+
+            ## Third
+        """,
+        "First",
+        body
+    )
+
+    _test(
+        """
+            ## Second
+
+            ## Third
+        """,
+        None,
+        body
+    )
+
+    _test(
+        """
+            # Second
+
+            # Third
+        """,
+        None,
+        body
+    )
+
+
+    _test(
+        """
+            # Third
+
+            aaa     %(aaa)s   %(bbb)s
+            bbb               %(bbb)s
+
+            ccc     %(bbb)s
+            ddd     %(bbb)s
+        """,
+        "Third",
+        """
+        <table>
+            <tr >
+                <td>aaa</td>
+                <td >%(aaa)s</td>
+                <td >%(bbb)s</td>
+            </tr>
+            <tr >
+                <td>bbb</td>
+                <td></td>
+                <td >%(bbb)s</td>
+            </tr>
+        </table>
+        <table>
+            <tr style="height:20px">
+                <td></td>
+                <td></td>
+            </tr>
+            <tr >
+                <td>ccc</td>
+                <td >%(bbb)s</td>
+            </tr>
+            <tr >
+                <td>ddd</td>
+                <td >%(bbb)s</td>
+            </tr>
+        </table>
+        """
+    )
+
 if __name__ == '__main__':
-    test_csv()
+    test_build()
