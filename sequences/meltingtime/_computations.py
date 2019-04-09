@@ -225,9 +225,44 @@ TRANSITIONS: np.dtype = np.dtype([
 ])
 
 class StrandList:
-    "compute the state list for complex states"
-    def __init__(self, hpin, *oligos, chpin = None, **_):
-        self.hpin   = Strands(hpin, opposite = chpin)
+    "Compute the state list for complex states"
+    _MATCH = re.compile(r"([53])-(\d+)(.*)").match
+    def __init__(self, *seqs, **_):
+        """
+        SEQS arguments work as follows:
+
+        * starting with a '5-' is an oligo binding to the 5' strand
+        * starting with a '3-' is an oligo binding to the 3' strand
+        * following the '5-' or '3-' must come a number indicating the position
+          relative to the hairpin
+        * if only '5-' '3-' are indicated or if both these and numbers are
+        missing, this is expected to be the hairpin's 5' (then 3') sequence
+        """
+        hpin:   Optional[str] = None
+        chpin:  Optional[str] = None
+        oligos: List          = []
+        for arg in seqs:
+            if isinstance(arg, (tuple, list)) and len(arg) == 2 and None in arg:
+                hpin, chpin = arg
+                continue
+            if isinstance(arg, (tuple, list, dict)):
+                oligos.append(arg)
+                continue
+
+            assert isinstance(arg, str)
+            elem = self._MATCH(arg)
+            if elem:
+                oligos.append((elem.group(3), elem.group(1) == '5', int(elem.group(2))))
+            elif arg[:2] == '5-':
+                hpin = arg[2:]
+            elif arg[:2] == '3-':
+                chpin = arg[2:]
+            elif hpin is not None:
+                chpin = arg
+            else:
+                hpin  = arg
+
+        self.hpin = Strands(hpin, opposite = chpin)
         def _new(oligo:str, seq:bool = False, shift:int = 0) -> Strands:
             "create a new strand"
             return (
@@ -299,7 +334,8 @@ class StrandList:
             return states[:,1:].max(1) != _OFF
         return states[:,1] != states[:,1].max()
 
-    def __str__(self):
+    def representation(self):
+        "return a string representation of the oligos"
         seqs = f"hairpin: {self.hpin.seq}"
         opps = ""
         for i, j in enumerate(self.oligos):
@@ -307,8 +343,10 @@ class StrandList:
                 opps +=  f"\n-{i: 6d}: {j.seq}"
             else:
                 seqs +=  f"\n+{i: 6d}: {j.opposite}"
-        return f"{super().__str__()}\n{seqs}{opps}\n         {self.hpin.opposite}"
+        return f"{seqs}{opps}\n         {self.hpin.opposite}"
 
+    def __str__(self):
+        return f"{super().__str__()}\n{self.representation()}"
 
     def __index_info(
             self,
@@ -538,9 +576,9 @@ class EnergyComputations(BaseComputations):
 
 class TransitionMatrix:
     "compute a transition matrix for complex states"
-    def __init__(self, hpin, *oligos, chpin = None, **_):
+    def __init__(self, *seqs, **_):
         self.dtype   = _DTYPE
-        self.strands = StrandList(hpin, *oligos, chpin = chpin, **_)
+        self.strands = StrandList(*seqs)
         self.data    = EnergyComputations(**_)
 
     def transitionmatrix(self, *masked, states : Optional[np.ndarray] = None) -> np.ndarray:
@@ -706,28 +744,3 @@ class TransitionStats(TransitionMatrix):
         out       = np.zeros(len(states), dtype = self.dtype)
         out[inds] = stable
         return out
-
-def configuration(*seqs, **kwa) -> TransitionStats:
-    """
-    Create a TransitionStats:
-
-    Arguments:
-
-    * starting with a '+5' is an oligo binding to the 5' strand
-    * starting with a '+3' is an oligo binding to the 3' strand
-    * following the '+5' or '+3' must come a number indicating the position relative to the hairpin
-    * if no number or '+-' are indicated, this is expected to be the hairpin's 5' (then 3') sequence
-    """
-    hpin   = None
-    chpin  = None
-    oligos: list = []
-    match  = re.compile(r"+([53])(\d+)(.*)").match
-    for arg in seqs:
-        temp = match(arg)
-        if temp:
-            oligos.append((temp.group(3), temp.group(1) == '5', int(temp.group(2))))
-        elif arg[0] == '5' or hpin is None:
-            hpin = arg[1:]
-        elif arg[0] == '3' or hpin is not None:
-            chpin = arg[1:]
-    return TransitionStats(hpin, *oligos, chpin = chpin, **kwa)

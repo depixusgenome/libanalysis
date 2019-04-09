@@ -175,12 +175,12 @@ def test_mt(mode, seq, oligo):
     "test melting times"
     truth = next(i[-1] for i in _MODES2 if i[:-1] == (mode, seq, oligo))
 
-    cnf   = TransitionStats(seq, oligo, force = 0 if mode == "o" else 8.5)
+    cnf   = TransitionStats(seq, '3-0'+oligo, force = 0 if mode == "o" else 8.5)
     out   = cnf.statistics(*(('hpin',) if mode == "o" else ()), ini = 'hybridized')
     assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
 
     if mode != 'f':
-        cnf   = TransitionStats(oligo[::-1], seq[::-1], force = 0 if mode == "o" else 8.5)
+        cnf   = TransitionStats(oligo[::-1], '3-0'+seq[::-1], force = 0 if mode == "o" else 8.5)
         out   = cnf.statistics(*(('hpin',) if mode == "o" else ()), ini = 'hybridized')
         assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
 
@@ -228,14 +228,14 @@ def test_mt_complex(args):
 def test_repr_hpin():
     "test_repr_hpin"
     cnf = TransitionStats(*_MODES3[-1][0], force = 8.5)
-    out = [i.strip() for i in str(cnf.strands).strip().split('\n')[1:]]
+    out = [i.strip() for i in cnf.strands.representation().strip().split('\n')]
     truth = [
         i.strip()
         for i in """
             hairpin: CCCCTAGGGGATTACCC
-            -     0: ...GATC..........
-            -     2: ..........TAAT...
-            +     1: .....AGGGA.......
+            +     0: ...GATC..........
+            +     2: ..........TAAT...
+            -     1: .....AGGGA.......
                      GGGGATCCCCTAATGGG
         """.strip().split('\n')
     ]
@@ -244,4 +244,5 @@ def test_repr_hpin():
 
 
 if __name__ == '__main__':
-    test_repr_hpin()
+    for i in _MODES3:
+        test_mt_complex(i[0])
