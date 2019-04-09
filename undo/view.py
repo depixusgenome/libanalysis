@@ -39,7 +39,7 @@ class UndoView(View):
         def _onstopaction(recursive = None, **_):
             assert recursive is not None
             if not recursive:
-                self._ctrl.undos.appendundos(self.__curr[0])
+                ctrl.undos.appendundos(self.__curr[0])
                 self.__curr[0] = None
 
         @ctrl.undos.observe
