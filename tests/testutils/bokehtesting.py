@@ -166,7 +166,19 @@ class ModalAccess:
 
     def open(self, btn = None):
         "starts the modal dialog"
-        self.driver.click(btn if btn else self.btn)
+        from selenium.common.exceptions import ElementClickInterceptedException
+        for _ in range(3):
+            try:
+                self.driver.click(btn if btn else self.btn)
+            except ElementClickInterceptedException:
+                elem = self.driver[".bbm-wrapper"]
+                if elem:
+                    self.driver.driver.execute_script(
+                        f"arguments[0].style.visibility='hidden'",
+                        elem
+                    )
+            else:
+                break
 
     def click(self, btn: Optional[str] = None, done: Optional[bool] = None):
         "opens and closes the dialog"
