@@ -3,8 +3,42 @@
 "All sequences-related stuff"
 import pytest
 from numpy.testing         import assert_allclose
-from sequences             import peaks, overlap, splitoligos, Translator
+from sequences             import peaks, overlap, splitoligos, Translator, read as readsequence
+from sequences.io          import LNAHairpin
 from sequences.meltingtime import OldStatesTransitions, TransitionStats
+
+def test_io(tmp_path):
+    "test io"
+    assert dict(readsequence({'a': 'aaa'})) == {"a": "aaa"}
+    assert dict(readsequence(iter({'a': 'aaa'}.items()))) == {"a": "aaa"}
+    assert dict(readsequence('aaa'*100)) == {"hairpin 1": "aaa"*100}
+
+    with open(tmp_path/"tmp.fasta", "w") as stream:
+        print(
+            """
+            > full
+            ccatATTCGTATcGTcccat
+            > oligo
+            cccat,tgtca
+            > target
+            TCGTAT
+            """.replace('\n'+' '*8, '\n'),
+            file = stream
+        )
+
+    assert dict(readsequence(tmp_path/"tmp.fasta")) == {
+        "full": "ccatATTCGTATcGTcccat",
+        "oligo": "cccat,tgtca",
+        "target":  "TCGTAT",
+    }
+
+    obj = LNAHairpin()
+    obj.setfrompath(tmp_path/"tmp.fasta")
+    assert obj.__dict__ == {
+        "full": "ccatATTCGTATcGTcccat",
+        "references": ["cccat", "tgtca"],
+        "target":  "TCGTAT",
+    }
 
 def test_peaks():
     "tests peaks"
