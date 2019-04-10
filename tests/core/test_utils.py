@@ -6,11 +6,15 @@ u"Test utils"
 from   enum               import Enum
 from   typing             import Generic, TypeVar, Tuple
 from   functools          import partial
+import pickle
 import pathlib
 import pytest
 import numpy as np
 from   utils              import escapenans, fromstream
+from   utils.decoration   import addto, extend, addproperty
 from   utils.gui          import intlistsummary, parseints, leastcommonkeys
+from   utils.datadump     import LazyShelf
+from   utils.array        import EventsArray, repeat, asobjarray, asdataarrays
 from   utils.lazy         import LazyInstError, LazyInstanciator, LazyDict
 from   utils.attrdefaults import fieldnames, changefields, initdefaults
 from   utils.inspection   import templateattribute, diffobj, isfunction, ismethod, parametercount
@@ -329,6 +333,55 @@ def test_escapenans():
     assert all(np.isnan(array2[[1,6]]))
     assert all(array2[[0,5]] == 1)
 
+def test_mutateclass():
+    "test class mutation"
+    # pylint: disable=no-member,unused-variable,unused-argument,missing-docstring
+    class _AClass:
+        def _afunc(self):
+            return 1
+        @classmethod
+        def _bfunc(cls):
+            return 1
+        @staticmethod
+        def _cfunc():
+            return 1
+
+    class _AClass:
+        "doc"
+
+    @addproperty(_AClass, 'toto')
+    class _BClass:
+        "class doc for _BClass"
+        def __init__(self, other):
+            self.other = other
+    obj = _AClass()
+    assert _AClass.toto.__doc__ == "class doc for _BClass"
+    assert isinstance(obj.toto, _BClass)
+    assert obj.toto is not obj.toto     # new instances on each call
+    assert obj.toto.other is obj
+
+    @addto(_AClass, property)
+    def myprop(self):
+        return 1
+    @addto(_AClass, staticmethod)
+    def mymeth():
+        return 1
+    assert obj.myprop == 1
+    assert obj.mymeth() == 1
+    assert _AClass.mymeth() == 1
+
+    assert _AClass.__doc__ == "doc"
+
+    @extend(_AClass)
+    class _CClass:
+        "more doc"
+        @staticmethod
+        def yam():
+            return 2
+    assert _AClass.__doc__ == "doc\nmore doc"
+    assert obj.yam() == 2
+    assert _AClass.yam() == 2
+
 def test_fromstream():
     u"tests fromstream"
     with open("/tmp/__utils__test.txt", "w") as stream:
@@ -501,5 +554,99 @@ def test_leastcommonkeys():
         == {"a1_x1_b2_c2" : "a1_x1_b2_c2", "": "ref"}
     )
 
+def test_arrays():
+    "test arrays"
+    arr = EventsArray([(0, np.ones(10)), (1, np.ones(5))], discarded = 5)
+    sec = pickle.loads(pickle.dumps(arr))
+    assert sec.discarded == 5
+    assert list(sec['start']) == [0, 1]
+    assert list(sec[0][1])    == [1]*10
+    assert list(sec[1][1])    == [1]*5
+
+    assert (
+        [list(i) for i in repeat(np.arange(3), 2, axis = 1).reshape(3,2)]
+        == [[0,0], [1,1], [2,2]]
+    )
+    assert (
+        [list(i) for i in repeat(np.arange(3), 2, axis = 0).reshape(2,3)]
+        == [[0,1,2], [0,1,2]]
+    )
+
+    out = asobjarray([[0], [1]])
+    assert out.dtype == 'O'
+    assert len(out) == 2
+    assert out[0] == [0]
+    assert out[1] == [1]
+
+    out = asobjarray(iter([[0], [1]]))
+    assert out.dtype == 'O'
+    assert len(out) == 2
+    assert out[0] == [0]
+    assert out[1] == [1]
+
+    out = asobjarray(out)
+    assert out.dtype == 'O'
+    assert len(out) == 2
+    assert out[0] == [0]
+    assert out[1] == [1]
+
+    out = out.reshape((-1,2))
+    out = asobjarray(out)
+    assert out.dtype == 'O'
+    assert len(out) == 1
+    out = out[0]
+    assert len(out) == 2
+    assert out[0] == [0]
+    assert out[1] == [1]
+
+    tmp = asdataarrays([
+        [(0, np.ones(10)), (1, np.ones(5))],
+        [(2, np.ones(10)), (3, np.ones(5))],
+        []
+    ])
+    assert tmp.dtype == 'O'
+    assert all(_.dtype == 'O' for _ in tmp) # pylint: disable=no-member
+
+def test_datadump(tmp_path):
+    "test data dump"
+    path  = tmp_path/"toto.lazy"
+    shelf = LazyShelf(path, dict(attr = lambda: 6), dum = lambda: 5, unstored = 10)
+    assert set(shelf.keys()) == {'attr', 'dum', 'unstored'}
+    assert 'attr'     in shelf
+    assert 'dum'      in shelf
+    assert 'unstored' in shelf
+    assert set(shelf.storedkeys()) == set()
+    assert not shelf.isstored('attr')
+    assert shelf['attr'] == 6
+    assert shelf.get('dum') == 5
+    assert shelf.get('missing', 111) == 111
+    assert shelf['unstored'] == 10
+    assert set(shelf.keys()) == {'attr', 'dum', 'unstored'}
+    assert set(shelf.storedkeys()) == {'attr', 'dum'}
+    assert shelf.isstored('attr')
+    assert not shelf.isstored('unstored')
+    shelf['change'] = lambda: 8
+    assert shelf['change'] == 8
+    shelf['change'] = 9
+    assert shelf['change'] == 9
+    shelf.store("key", "val")
+    assert "key" in shelf
+    assert shelf['key'] == 'val'
+    assert shelf.isstored('key')
+
+    shelf = LazyShelf.frompath(path)
+    assert set(shelf.keys()) == {'attr', 'dum', 'change', 'key'}
+    assert shelf['attr'] == 6
+    assert shelf['dum'] == 5
+    assert shelf['change'] == 8
+    assert shelf['key'] == 'val'
+
+    shelf.set("any", lambda: 11, force = True)
+    shelf.set("any2", 11)
+    assert shelf['any'] == 11
+    assert shelf['any2'] == 11
+    shelf = LazyShelf.frompath(path)
+    assert set(shelf.keys()) == {'attr', 'dum', 'change', 'key', 'any'}
+
 if __name__ == '__main__':
-    test_leastcommonkeys()
+    test_arrays()

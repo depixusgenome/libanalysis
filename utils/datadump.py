@@ -10,6 +10,9 @@ import shelve
 class _DEFAULT:
     pass
 
+def _open(path):
+    return shelve.open(str(path))
+
 class LazyShelf(dict):
     """
     Lazy shelf
@@ -24,6 +27,16 @@ class LazyShelf(dict):
         self.path = path
         self.info: Dict[Any, Callable[[], Any]] = {}
         self.update(*args, **kwa)
+
+    @classmethod
+    def frompath(cls, path) -> 'LazyShelf':
+        "read a shelf from file"
+        def _get(name):
+            with _open(path) as stream:
+                return stream[name]
+
+        with _open(path) as stream:
+            return LazyShelf(path, {i: partial(_get, i) for i in stream.keys()})
 
     def get(self, key, default = None):
         "returns the value"
@@ -113,7 +126,7 @@ class LazyShelf(dict):
 
     def pop(self, key, default = _DEFAULT):
         "pops value"
-        with shelve.open(self.path) as stream:
+        with _open(self.path) as stream:
             if key in stream:
                 del stream[key]
 
@@ -124,13 +137,12 @@ class LazyShelf(dict):
 
     def storedkeys(self) -> List[str]:
         "returns the value"
-        with shelve.open(self.path) as stream:
+        with _open(self.path) as stream:
             return list(stream.keys())
 
     def isstored(self, key) -> bool:
         "returns the value"
-        with shelve.open(self.path) as stream:
-            return key in stream.keys()
+        return key in self.storedkeys()
 
     def keys(self) -> KeysView:
         "returns keys"
@@ -138,7 +150,7 @@ class LazyShelf(dict):
 
     def items(self) -> Iterator[Tuple[Any, Any]]: # type: ignore
         "returns keys"
-        with shelve.open(self.path) as stream:
+        with _open(self.path) as stream:
             for i, val in list(self.info.items()):
                 if i in stream:
                     val          = stream[i]
@@ -160,12 +172,12 @@ class LazyShelf(dict):
             if key[0] == '_':
                 key = key[1:]
 
-        with shelve.open(self.path) as stream:
+        with _open(self.path) as stream:
             stream[key] = self.info[key] = value
         return value
 
     def __store(self, key, fcn: Callable, *args, **kwa):
-        with shelve.open(self.path) as stream:
+        with _open(self.path) as stream:
             if key in stream:
                 val            = stream[key]
                 self.info[key] = val

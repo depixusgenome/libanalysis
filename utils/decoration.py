@@ -120,33 +120,35 @@ def escapenans(*arrays: np.ndarray, reset = True):
     Allows removing nans from arrays prior to a computation and putting
     them back inside afterwards:
 
-        >>> import numpy as np
-        >>> array1, array2 = np.arange(10), np.ones((10,))
-        >>> array1[[0,5]] = np.nan
-        >>> array2[[1,6]] = np.nan
-        >>> with escapenan(array1, array2) as (cur1, cur2):
-        >>>     assert not any(np.isnan(cur1)) and not any(np.isnan(cur2))
-        >>>     cur1 += cur2
-        >>> inds = [2,3,4,7,8,9]
-        >>> assert all(array1[inds] ==  (np.arange(10)+1)[inds])
-        >>> assert all(np.isnan(array1[[0,5]]))
-        >>> assert all(array1[[1,6]] == [1,6])
-        >>> assert all(np.isnan(array2[[1,6]]))
-        >>> assert all(array2[[0,5]] == 1)
+    ```python
+    array1, array2 = np.arange(10), np.ones((10,))
+    array1[[0,5]] = np.nan
+    array2[[1,6]] = np.nan
+    with escapenans(array1, array2) as (cur1, cur2):
+        assert not any(np.isnan(cur1)) and not any(np.isnan(cur2))
+        cur1 += cur2
+    inds = [2,3,4,7,8,9]
+    assert all(array1[inds] ==  (np.arange(10)+1)[inds])
+    assert all(np.isnan(array1[[0,5]]))
+    assert all(array1[[1,6]] == [1,6])
+    assert all(np.isnan(array2[[1,6]]))
+    assert all(array2[[0,5]] == 1)
+    ```
 
     Can also be used as a wrapper:
 
-        >>> import numpy as np
-        >>> inds   = [2,3,4,7,8,9]
-        >>> array1 = np.arange(10)
-        >>> array1[[0,1,5,6]] = np.nan
-        >>> def _fcn(x):
-        ...    assert not any(np.isnan(x))
-        ...    x[:] += 1
-        >>> wrapped = escapenan(_fcn)
-        >>> wrapped(array1)
-        >>> assert all(array1[inds] ==  (np.arange(10)+1)[inds])
-        >>> assert all(np.isnan(array1[[0,1,5,6]]))
+    ```python
+    inds   = [2,3,4,7,8,9]
+    array1 = np.arange(10)
+    array1[[0,1,5,6]] = np.nan
+    def _fcn(x):
+       assert not any(np.isnan(x))
+       x[:] += 1
+    wrapped = escapenans(_fcn)
+    wrapped(array1)
+    assert all(array1[inds] ==  (np.arange(10)+1)[inds])
+    assert all(np.isnan(array1[[0,1,5,6]]))
+    ```
     """
     if len(arrays) == 1 and callable(arrays[0]):
         fcn = arrays[0]
@@ -246,18 +248,20 @@ def addproperty(other, attr = 'display', prop = None, **args):
     """
     Adds the decorated class as a property to another.
 
-        >>> class A:
-        ...     pass
-        >>> @addproperty(A, 'toto')
-        ... class B:
-        ...     "class doc for B"
-        ...     def __init__(self, other):
-        ...         self.other = other
-        >>> a = A()
-        >>> assert A.toto.__doc__ == "class doc for B"
-        >>> assert isinstance(a.toto, B)
-        >>> assert a.toto is not a.toto     # new instances on each call
-        >>> assert a.toto.other is a
+    ```python
+    class A:
+        pass
+    @addproperty(A, 'toto')
+    class B:
+        "class doc for B"
+        def __init__(self, other):
+            self.other = other
+    a = A()
+    assert A.toto.__doc__ == "class doc for B"
+    assert isinstance(a.toto, B)
+    assert a.toto is not a.toto     # new instances on each call
+    assert a.toto.other is a
+    ```
     """
     def _wrapper(cls):
         if args:
