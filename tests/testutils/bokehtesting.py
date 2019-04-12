@@ -223,6 +223,12 @@ class SeleniumAccess:
         if wait:
             self.server.wait()
 
+    def select(self, name, value):
+        "select a value in a dropdown"
+        from selenium.webdriver.support.ui import Select
+        select = Select(self[name])
+        select.select_by_value(value)
+
     def enabled(self, name):
         "click on a button"
         return not self[name].is_enabled()
