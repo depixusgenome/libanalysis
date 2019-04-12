@@ -187,6 +187,7 @@ class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
             if cache:
                 self._doc.add_next_tick_callback(lambda: self._render(ctrl, cache, msg))
             else:
+                ctrl.display.handle('rendered', args = {'element': self})
                 LOGS.debug(*msg)
 
         def _reset_without_render(self, ctrl, old, cache):
