@@ -166,6 +166,7 @@ class ModalAccess:
 
     def open(self, btn = None):
         "starts the modal dialog"
+        # pylint: disable=import-error
         from selenium.common.exceptions import ElementClickInterceptedException
         for _ in range(3):
             try:
@@ -225,6 +226,7 @@ class SeleniumAccess:
 
     def select(self, name, value):
         "select a value in a dropdown"
+        # pylint: disable=import-error
         from selenium.webdriver.support.ui import Select
         select = Select(self[name])
         select.select_by_value(value)
@@ -449,6 +451,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         kwa    = dict(self.kwa)
         if kwa.get('runtime', '') == 'selenium':
             kwa.update(runtime = 'none')
+            # pylint: disable=import-error
             from selenium.webdriver import Firefox, FirefoxOptions
             opts          = FirefoxOptions()
             opts.headless = self.headless
