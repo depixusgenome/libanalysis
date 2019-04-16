@@ -19,6 +19,7 @@ from   utils.lazy         import LazyInstError, LazyInstanciator, LazyDict
 from   utils.attrdefaults import fieldnames, changefields, initdefaults
 from   utils.inspection   import templateattribute, diffobj, isfunction, ismethod, parametercount
 from   utils.configobject import ConfigObject
+from   utils.rescaler     import Rescaler
 
 class TestLazy:
     u"test lazy stuff"
@@ -648,5 +649,42 @@ def test_datadump(tmp_path):
     shelf = LazyShelf.frompath(path)
     assert set(shelf.keys()) == {'attr', 'dum', 'change', 'key', 'any'}
 
+def test_rescaler():
+    "test rescaler"
+    class _Resc(Rescaler, zattributes = ('aaa', '~bbb', ('ccc', -2),  'eee', 'fff')):
+        def __init__(self):
+            self.aaa = 1.
+            self.bbb = [1., "mmm"]
+            self.ccc = {1. : 1.}
+            self.ddd = 1.
+            self.eee = {1.}
+            self.fff = (1.,)
+
+    obj = _Resc()
+    assert obj is not obj.rescale(5.)
+    assert obj.rescale(5.).__dict__ == {
+        'aaa': 5., 'bbb': [1./5., 'mmm'], 'ccc': {1./25.: 1./25.},
+        'ddd': 1., 'eee': {5.}, 'fff': (5.,)
+    }
+    assert obj.__dict__ == {
+        'aaa': 1., 'bbb': [1., 'mmm'], 'ccc': {1.: 1.},
+        'ddd': 1., 'eee': {1.}, 'fff': (1.,)
+    }
+
+
+    class _Resc2(_Resc):
+        def __getstate__(self):
+            return {'mmm': self.aaa, "aaa": self.aaa}
+
+        def __setstate__(self, val):
+            self.__dict__.update(val)
+
+    obj = _Resc2()
+    assert obj.rescale(5.).__dict__ == { 'mmm': 1., 'aaa': 5.}
+    assert obj.__dict__ == {
+        'aaa': 1., 'bbb': [1., 'mmm'], 'ccc': {1.: 1.},
+        'ddd': 1., 'eee': {1.}, 'fff': (1.,)
+    }
+
 if __name__ == '__main__':
-    test_arrays()
+    test_rescaler()
