@@ -25,9 +25,15 @@ np.seterr(all='raise')
 
 class ResourcePath:
     "get resources"
-    def __init__(self, root = "../tests/testingcore/", kwa = None):
+    def __init__(self, root = None, kwa = None):
         self.paths: Dict[str, Any] = {} if kwa is None else kwa
-        self.root                  = root
+        if root is None:
+            path = Path(__file__).parent.parent.parent
+            if path.stem == 'build':
+                path = path.parent
+            self.root = str(path/"data")+"/"
+        else:
+            self.root = str(root)
 
     def __call__(self, name: Union[None, Sequence[str], str] = "") -> Union[str, Sequence[str]]:
         "returns the path to the data"
