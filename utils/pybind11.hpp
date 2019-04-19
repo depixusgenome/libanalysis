@@ -8,7 +8,7 @@
 #include <boost/preprocessor/seq/for_each.hpp>
 #ifdef __GNUC__
 # ifdef __clang__
-#   if (__clang_major__ == 6)
+#   if (__clang_major__ <= 8)
 #     pragma GCC diagnostic push
 #     pragma GCC diagnostic ignored "-Wmissing-noreturn"
 #   endif
@@ -33,7 +33,7 @@
 #include <pybind11/numpy.h>
 #ifdef __GNUC__
 # ifdef __clang__
-#   if (__clang_major__ == 6)
+#   if (__clang_major__ <= 8)
 #     pragma GCC diagnostic pop
 #   endif
 # else
