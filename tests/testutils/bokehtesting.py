@@ -21,24 +21,24 @@ warnings.filterwarnings(
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category = DeprecationWarning)
+    # pylint: disable=unused-import
     import pytest
     from bokeh.model                import Model
     from bokeh.document             import Document
     from bokeh.server.server        import Server
     import bokeh.core.properties    as     props
-    import bokeh.plotting.figure # pylint: disable=unused-import
+    import bokeh.plotting.figure
 
 # pylint: disable=wrong-import-position
 from tornado.platform.asyncio       import AsyncIOMainLoop
 import webruntime
 
 import app.configuration as _conf
-from tests.testutils                import needsdisplay
 from utils.logconfig                import getLogger, iterloggers
 from view.static                    import ROUTE
 from view.keypress                  import DpxKeyEvent
 
-LOGS = getLogger()
+LOGS = getLogger(__name__)
 
 class ErrorHandler(logging.Handler):
     """
@@ -350,7 +350,10 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             from   app.scripting import addload
             from   utils.gui     import storedjavascript
 
-            name = inspect.getouterframes(inspect.currentframe())[4].function
+            name = "___"
+            for j in inspect.getouterframes(inspect.currentframe()):
+                if j.function.startswith("test_"):
+                    name = j.function
             addload("view.static", "modaldialog")
             _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
             kwa.setdefault('port', 'random')
@@ -403,8 +406,8 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         )
 
     def __set_handler(self):
-        self.__hdl      = ErrorHandler()
-        logging.getLogger().addHandler(self.__hdl)
+        self.__hdl = ErrorHandler()
+        getLogger().addHandler(self.__hdl)
 
     def __start(self):
         haserr = [False]
@@ -416,8 +419,8 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
                 LOGS.debug("done waiting")
                 setattr(self.ctrl, 'CATCHERROR', False)
 
-                root = next(i for i in self.doc.roots if hasattr(i, 'keycontrol'))
-                if root.keycontrol:
+                root = next((i for i in self.doc.roots if hasattr(i, 'keycontrol')), None)
+                if getattr(root, 'keycontrol', False):
                     assert first[0]
                     first[0] = False
                     self.doc.add_next_tick_callback(lambda: setattr(root, 'keycontrol', False))
@@ -487,8 +490,11 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
         "send command to the view"
-        if rendered is True:
-            self.ctrl.display.oneshot("rendered", lambda *_1, **_2: self.wait())
+        if rendered:
+            self.ctrl.display.oneshot(
+                rendered if isinstance(rendered, str) else "rendered",
+                lambda *_1, **_2: self.wait()
+            )
             andstop = False
         if andstop:
             def _cmd():
@@ -526,7 +532,10 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         "loads a path"
         import view.dialog  # pylint: disable=import-error
         def _tkopen(*_1, **_2):
-            return self.path(path)
+            out = self.path(path)
+            LOGS.debug("opening path %s -> %s", path, out)
+            return out
+
         self.monkeypatch.setattr(view.dialog, '_tkopen', _tkopen)
         self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_HAS_ZENITY', False)
         if andpress:
@@ -663,22 +672,3 @@ class BokehAction:
         "apply monkey patch"
         self.monkeypatch.setattr(*args, **kwargs)
         return self
-
-@pytest.fixture(params = [pytest.param("", marks = needsdisplay)])
-def bokehaction(monkeypatch):
-    """
-    Create a BokehAction fixture.
-    Use case is:
-
-    > def test_myview(bokehaction):
-    >    with bokehaction.server(ToolBar, 'default') as server:
-    >       server.load('small_legacy')
-    >       assert ...
-    >       server.press('Control-z')
-
-    BokehAction.view is the created view. Any of its protected attribute can
-    be accessed directly, for example BokehAction.view._ctrl  can be accessed
-    through BokehAction.ctrl.
-    """
-    with BokehAction(monkeypatch) as act:
-        yield act
