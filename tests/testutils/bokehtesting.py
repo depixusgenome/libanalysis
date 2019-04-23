@@ -57,7 +57,7 @@ class DpxTestLoaded(Model):
     This starts tests once flexx/browser window has finished loading
     """
     __javascript__     = ROUTE+"/jquery.min.js"
-    __implementation__ = 'bokehtesting.coffee'
+    __implementation__ = 'bokehtesting.ts'
     done        = props.Int(0)
     event       = props.Dict(props.String, props.Any)
     event_cnt   = props.Int(0)

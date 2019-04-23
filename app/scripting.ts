@@ -17,7 +17,7 @@ export interface DpxLoaded extends DpxLoaded.Attrs {}
 export class DpxLoadedView extends DOMView {
     model: DpxLoaded
     connect_signals(): void {
-        super().connect_signals()
+        super.connect_signals()
         this.connect(
             this.model.properties.resizedfig.change,
             () => { this.model.on_resize_figure() }
@@ -49,3 +49,4 @@ export class DpxLoaded extends Model {
         }
     }
 }
+DpxLoaded.initClass()
