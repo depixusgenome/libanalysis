@@ -23,7 +23,7 @@ class DpxKeyEvent(Model):
     keys               = List(String)
     value              = String("")
     count              = Int(0)
-    __implementation__ = "keypress.coffee"
+    __implementation__ = "keypress.ts"
     def __init__(self, ctrl = None):
         super().__init__()
         self._keys:     Dict[str, str]      = KeyCalls()
