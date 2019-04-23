@@ -16,7 +16,7 @@ class DpxModal(Model):
                           ROUTE+"/backbone.modal.theme.css"]
     __javascript__     = [ROUTE+"/underscore-min.js",
                           ROUTE+"/jquery.min.js"]
-    __implementation__ = "modal.coffee"
+    __implementation__ = "modal.ts"
     title              = props.String("")
     body               = props.String("")
     buttons            = props.String("")

@@ -270,11 +270,14 @@ class CSVOption(Option):
 
 _PREC   = r'(?:\.(?P<prec>\d*))?'
 _OPT    = r'(?P<opt>o)?'
+def _int(val: str) -> int:
+    return int(float(val)) if '.' in val else int(val)
+
 OPTIONS = (CheckOption(),
-           TextOption(int,   _OPT+r'(?P<fmt>[idID])',     0),
+           TextOption(_int,  _OPT+r'(?P<fmt>[idID])',     0),
            TextOption(float, _PREC+_OPT+r'(?P<fmt>[fF])', 'prec'),
            TextOption(str,   _OPT+r'(?P<width>\d*)s',    None),
-           CSVOption(int,    _OPT+r'(?P<width>\d*)csv[id]'),
+           CSVOption(_int,   _OPT+r'(?P<width>\d*)csv[id]'),
            CSVOption(float,  _OPT+r'(?P<width>\d*)csvf'),
            CSVOption(str,    _OPT+r'(?P<width>\d*)csv'),
            ChoiceOption())
