@@ -8,7 +8,7 @@ from bokeh.models.widgets.inputs  import (InputWidget, Callback, String,
 
 class PathInput(InputWidget):
     """ widget to access a path. """
-    __implementation__ = "pathinput.coffee"
+    __implementation__ = "pathinput.ts"
     value       = String(default="", help="""
     Initial or entered text value.
     """)
