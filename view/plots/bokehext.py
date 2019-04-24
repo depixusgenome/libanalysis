@@ -19,7 +19,7 @@ class DpxKeyedRow(Row):
     keys               = props.Dict(props.String, props.String, help = 'keys and their action')
     zoomrate           = props.Float()
     panrate            = props.Float()
-    __implementation__ = 'keyedrow.coffee'
+    __implementation__ = 'keyedrow.ts'
     def __init__(self, ctrl, plotter, fig, **kwa):
         vals  = (''.join(i) for i in product(('pan', 'zoom'), ('x', 'y'), ('low', 'high')))
         mdl   = ctrl.theme.model('keystroke')
@@ -74,8 +74,8 @@ class DpxKeyedRow(Row):
 class DpxHoverTool(HoverTool):
     "sorts indices before displaying tooltips"
     maxcount           = props.Int(5)
-    __implementation__ = "hovertool.coffee"
+    __implementation__ = "hovertool.ts"
 
 class DpxNumberFormatter(NumberFormatter):
     "Deals with Nones correctly"
-    __implementation__ = "numberformatter.coffee"
+    __implementation__ = "numberformatter.ts"
