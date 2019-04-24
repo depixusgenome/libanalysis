@@ -117,7 +117,10 @@ class BaseFileDialog:
 
     @staticmethod
     def _callzenity(info, dialog):
-        cmd = ['zenity', '--file-selection', '--title', str(info["title"])]
+        cmd = ['zenity', '--file-selection']
+        if info.get('title', ''):
+            cmd += ['--title', str(info["title"])]
+
         if dialog is _tksave:
             cmd += ['--save', '--confirm-overwrite']
 
