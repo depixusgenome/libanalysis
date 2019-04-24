@@ -9,6 +9,6 @@ class FontIcon(AbstractIcon): # pylint: disable=too-many-ancestors
     """
     A "stock" icon from those available in static/icons.css
     """
-    __implementation__ = "fonticon.coffee"
+    __implementation__ = "fonticon.ts"
     __css__            = route("icons.css")
     iconname           = props.String("cog")
