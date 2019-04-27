@@ -80,7 +80,7 @@ export class PathInput extends InputWidget {
         this.prototype.type= "PathInput"
         this.prototype.default_view= PathInputView
 
-        this.define({
+        this.define<PathInput.Props>({
             value:       [p.String, ""],
             placeholder: [p.String, ""],
             click:       [p.Number, 0],

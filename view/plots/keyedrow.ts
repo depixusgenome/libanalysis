@@ -1,13 +1,16 @@
 import * as p         from "core/properties"
 import {RowView, Row} from "models/layouts/row"
 import {ToolbarBox}   from "models/tools/toolbar_box"
+import {Range1d}      from "models/ranges/range1d"
+import {Tool}         from "models/tools/tool"
+import {Plot}         from "models/plots/plot"
 
 export namespace DpxKeyedRow {
     export type Attrs = p.AttrsOf<Props>
 
     export type Props = Row.Props & {
-        _curr:    p.Property<any>
-        fig:      p.Property<any>
+        _curr:    p.Property<Tool | null>
+        fig:      p.Property<Plot | null>
         toolbar:  p.Property<any>
         keys:     p.Property<string[]>
         zoomrate: p.Property<number>
@@ -71,7 +74,7 @@ export class DpxKeyedRow extends Row {
 
     }
 
-    _activate(tool): void { tool.active = !tool.active }
+    _activate(tool:Tool): void { tool.active = !tool.active }
 
     _set_active(name:string): void {
         let tool = this._get_tool(name)
@@ -95,13 +98,13 @@ export class DpxKeyedRow extends Row {
         }
     }
 
-    _bounds(rng) : [number, number] {
+    _bounds(rng: Range1d) : [number, number] {
         if(rng.bounds != null)
             return rng.bounds
         return [rng.reset_start, rng.reset_end]
     }
 
-    _do_zoom(zoomin:boolean, rng): void {
+    _do_zoom(zoomin:boolean, rng: Range1d): void {
         let center = (rng.end+rng.start)*.5
         let delta  = rng.end-rng.start
         if(zoomin)
@@ -119,7 +122,7 @@ export class DpxKeyedRow extends Row {
             rng.end   = bounds[1]
     }
 
-    _do_pan(panlow:boolean, rng): void {
+    _do_pan(panlow:boolean, rng: Range1d): void {
         let bounds: [number, number] = this._bounds(rng)
         let delta: number  = (rng.end-rng.start)*this.panrate*(panlow? -1 : 1)
         if(bounds[0] > rng.start + delta)
@@ -176,7 +179,7 @@ export class DpxKeyedRow extends Row {
                 let tool = val.slice(0, 3) === "pan" ? "pan" : "zoom";  
                 let rng  = val.indexOf("x") >= 0 ? "x_range" : "y_range";
                 let dir  = "low" === val.slice(val.length - 3, val.length);
-                this["_do_"+tool](dir, this.fig[rng])
+                this["_do_"+tool](dir, ((this.fig as any)[rng]) as Range1d)
             }
         }
     }
@@ -194,7 +197,7 @@ export class DpxKeyedRow extends Row {
             _curr:    [p.Any, null]
         })
 
-        this.define({
+        this.define<DpxKeyedRow.Props>({
             fig:      [p.Instance ],
             toolbar:  [p.Instance, null],
             keys:     [p.Any,   {}],

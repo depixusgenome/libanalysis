@@ -3,18 +3,25 @@ import {DOMView}            from "core/dom_view"
 import {Model}              from "model"
 
 declare function jQuery(...args: any[]): any
+declare function __extends(...args:any[]): void
+declare var _: any
 
 /* Modal was copied from backbone-modal */
-var Modal, boundMethodCheck = function (instance, Constructor) { if (!(instance instanceof Constructor)) {
-    throw new Error('Bound instance method accessed before binding');
-} }, indexOf = [].indexOf;
+function boundMethodCheck(instance:any, Constructor: any) {
+    if (!(instance instanceof Constructor)) {
+        throw new Error('Bound instance method accessed before binding');
+    }
+}
+const indexOf = [].indexOf;
 
-Modal = (function () {
+// @ts-ignore
+let Modal: any = (function () {
     // Modal was copied from backbone-modal
     var Modal = /** @class */ (function (_super) {
         __extends(Modal, _super);
-        function Modal(options) {
+        function Modal(options:any) {
             if (options === void 0) { options = {}; }
+            // @ts-ignore
             var _this = _super.call(this, options) || this;
             _this.rendererCompleted = _this.rendererCompleted.bind(_this);
             _this.checkKey = _this.checkKey.bind(_this);
@@ -29,7 +36,7 @@ Modal = (function () {
             _this.setUIElements();
             return _this;
         }
-        Modal.prototype.render = function (options) {
+        Modal.prototype.render = function (options: any) {
             var data, ref;
             _super.prototype.render.call(this, options);
             // use openAt or overwrite this with your own functionality
@@ -109,7 +116,7 @@ Modal = (function () {
                 throw new Error('No viewContainer defined for Modal');
             }
         };
-        Modal.prototype.getOption = function (option) {
+        Modal.prototype.getOption = function (option: any) {
             // get class instance property
             if (!option) {
                 return;
@@ -152,14 +159,13 @@ Modal = (function () {
             results = [];
             for (key in this.views) {
                 if (_.isString(key) && key !== 'length') {
-                    match = key.match(/^(\S+)\s*(.*)$/);
+                    match = key.match(/^(\S+)\s*(.*)$/) as [any, any, any];
                     trigger = match[1];
                     selector = match[2];
                     results.push(this.$el.on(trigger, selector, this.views[key], this.triggerView));
                 }
-                else {
+                else
                     results.push(void 0);
-                }
             }
             return results;
         };
@@ -180,7 +186,7 @@ Modal = (function () {
             results = [];
             for (key in this.views) {
                 if (_.isString(key) && key !== 'length') {
-                    match = key.match(/^(\S+)\s*(.*)$/);
+                    match = key.match(/^(\S+)\s*(.*)$/) as [any, any, any];
                     trigger = match[1];
                     selector = match[2];
                     results.push(this.$el.off(trigger, selector, this.views[key], this.triggerView));
@@ -191,7 +197,7 @@ Modal = (function () {
             }
             return results;
         };
-        Modal.prototype.checkKey = function (e) {
+        Modal.prototype.checkKey = function (e:any) {
             boundMethodCheck(this, Modal);
             if (this.active) {
                 switch (e.keyCode) {
@@ -202,18 +208,18 @@ Modal = (function () {
                 }
             }
         };
-        Modal.prototype.clickOutside = function (e) {
+        Modal.prototype.clickOutside = function () {
             var ref;
             boundMethodCheck(this, Modal);
             if (((ref = this.outsideElement) != null ? ref.hasClass(this.prefix + "-wrapper") : void 0) && this.active) {
                 return this.triggerCancel();
             }
         };
-        Modal.prototype.clickOutsideElement = function (e) {
+        Modal.prototype.clickOutsideElement = function (e: any) {
             boundMethodCheck(this, Modal);
             return this.outsideElement = jQuery(e.target);
         };
-        Modal.prototype.buildTemplate = function (template, data) {
+        Modal.prototype.buildTemplate = function (template: any, data: any) {
             var templateFunction;
             if (typeof template === 'function') {
                 templateFunction = template;
@@ -223,7 +229,7 @@ Modal = (function () {
             }
             return templateFunction(data);
         };
-        Modal.prototype.buildView = function (viewType, options) {
+        Modal.prototype.buildView = function (viewType:any, options: any) {
             var view;
             // returns a DOMView instance, a function or an object
             if (!viewType) {
@@ -236,6 +242,7 @@ Modal = (function () {
                 view = new viewType(options || this.args[0]);
                 if (view instanceof DOMView) {
                     return {
+                        // @ts-ignore
                         el: view.render().$el,
                         view: view
                     };
@@ -251,7 +258,7 @@ Modal = (function () {
                 el: viewType.$el
             };
         };
-        Modal.prototype.triggerView = function (e) {
+        Modal.prototype.triggerView = function (e:any) {
             var base, base1, index, instance, key, options, ref;
             boundMethodCheck(this, Modal);
             // trigger what view should be rendered
@@ -265,7 +272,7 @@ Modal = (function () {
             if (this.currentView) {
                 this.previousView = this.currentView;
                 if (!((ref = options.openOptions) != null ? ref.skipSubmit : void 0)) {
-                    if ((typeof (base = this.previousView).beforeSubmit === "function" ? base.beforeSubmit(e) : void 0) === false) {
+                    if ((typeof (base = this.previousView).beforeSubmit === "function" ? base.beforeSubmit() : void 0) === false) {
                         return;
                     }
                     if (typeof (base1 = this.previousView).submit === "function") {
@@ -297,7 +304,7 @@ Modal = (function () {
                 return this.$(this.viewContainerEl).html(instance.el);
             }
         };
-        Modal.prototype.animateToView = function (view) {
+        Modal.prototype.animateToView = function (view:any) {
             var _this = this;
             var base, container, newHeight, previousHeight, ref, style, tester;
             style = {
@@ -356,7 +363,7 @@ Modal = (function () {
                 }
             }
         };
-        Modal.prototype.triggerSubmit = function (e) {
+        Modal.prototype.triggerSubmit = function (e:any) {
             var ref, ref1;
             boundMethodCheck(this, Modal);
             if (e != null) {
@@ -366,12 +373,12 @@ Modal = (function () {
                 return;
             }
             if (this.beforeSubmit) {
-                if (this.beforeSubmit(e) === false) {
+                if (this.beforeSubmit() === false) {
                     return;
                 }
             }
             if (this.currentView && this.currentView.beforeSubmit) {
-                if (this.currentView.beforeSubmit(e) === false) {
+                if (this.currentView.beforeSubmit() === false) {
                     return;
                 }
             }
@@ -393,7 +400,7 @@ Modal = (function () {
                 return this.destroy();
             }
         };
-        Modal.prototype.triggerCancel = function (e) {
+        Modal.prototype.triggerCancel = function (e:any) {
             boundMethodCheck(this, Modal);
             if (e != null) {
                 e.preventDefault();
@@ -415,7 +422,7 @@ Modal = (function () {
         };
         Modal.prototype.destroy = function () {
             var _this = this;
-            var removeViews;
+            let removeViews: any;
             jQuery('body').off('keyup.bbm', this.checkKey);
             this.$el.off('mouseup.bbm', this.clickOutsideElement);
             this.$el.off('click.bbm', this.clickOutside);
@@ -446,7 +453,7 @@ Modal = (function () {
                 return removeViews();
             }
         };
-        Modal.prototype.openAt = function (options) {
+        Modal.prototype.openAt = function (options:any) {
             var atIndex, attr, i, key, view;
             if (_.isNumber(options)) {
                 atIndex = options;
@@ -484,7 +491,7 @@ Modal = (function () {
             }
             return this;
         };
-        Modal.prototype.next = function (options) {
+        Modal.prototype.next = function (options:any) {
             if (options === void 0) { options = {}; }
             if (this.currentIndex + 1 < this.views.length) {
                 return this.openAt(_.extend(options, {
@@ -492,7 +499,7 @@ Modal = (function () {
                 }));
             }
         };
-        Modal.prototype.previous = function (options) {
+        Modal.prototype.previous = function (options:any) {
             if (options === void 0) { options = {}; }
             if (this.currentIndex - 1 < this.views.length - 1) {
                 return this.openAt(_.extend(options, {
@@ -511,11 +518,14 @@ Modal = (function () {
 }).call(this);
 
 class DpxModalDialogView extends Modal {
-    template(data) { return data['template'] }
+    model: DpxModal
+    startvalues: any
+    constructor(attrs: any) { super(attrs); }
+    template(data: any): string | null { return data['template'] }
 
-    _form_values(){
-        let vals = {}
-        let ref = jQuery(this.modalEl).find('#dpxbbmform').serializeArray();
+    _form_values(): any {
+        let vals: any = {}
+        let ref:  any = jQuery(this.modalEl).find('#dpxbbmform').serializeArray();
         for(let i = 0; i < ref.length; ++i)
             vals[ref[i].name] = ref[i].value
 
@@ -525,19 +535,22 @@ class DpxModalDialogView extends Modal {
         return vals
     }
 
-    render(options) {
-        super.render(options)
+    render(): DpxModalDialogView {
+        super.render()
         if(this.startvalues != null)
             this.startvalues = this._form_values()
         return this
     }
 
-    cancel() { return delete this.startvalues }
+    cancel(): void { delete this.startvalues }
 
-    beforeSubmit(e)
-    { return document.forms['dpxbbmform'].reportValidity() }
+    beforeSubmit(): boolean
+    { 
+        // @ts-ignore
+        return document.forms['dpxbbmform'].reportValidity() 
+    }
 
-    submit() {
+    submit(): void {
         let vals = this._form_values()
         if(this.startvalues != null) {
             let tmp = vals;
@@ -552,16 +565,13 @@ class DpxModalDialogView extends Modal {
         this.model.results    = vals
         this.model.submitted += 1
         if(this.model.callback != null)
-        {
             this.model.callback.execute(this.model.results)
-        }
     }
 
     static initClass() : void 
     {
         this.prototype.cancelEl= '.dpx-modal-cancel'
         this.prototype.submitEl= '.dpx-modal-done'
-        this.prototype.className= 'dpx-modal'
     }
 }
 DpxModalDialogView.initClass()
@@ -575,7 +585,7 @@ export namespace DpxModal {
         results:      p.Property<any>
         submitted:    p.Property<number>
         startdisplay: p.Property<number>
-        keycontrol:   p.Property<number>
+        keycontrol:   p.Property<boolean>
         callback:     p.Property<any>
     }
 }
@@ -584,8 +594,8 @@ export interface DpxModal extends DpxModal.Attrs {}
 
 export class DpxModalView extends DOMView {
     model: DpxModal
-    initialize(options) {
-        super.initialize(options)
+    initialize(): void {
+        super.initialize()
         jQuery('body').append("<div class='dpx-modal-div'/>")
     }
     connect_signals(): void {
@@ -595,12 +605,7 @@ export class DpxModalView extends DOMView {
             () => this.model._startdisplaymodal()
         )
     }
-    static initClass() : void 
-    {
-        this.prototype.className = 'dpx-modal-view'
-    }
 }
-DpxModalView.initClass()
 
 export class DpxModal extends Model {
     properties: DpxModal.Props
@@ -678,14 +683,15 @@ export class DpxModal extends Model {
     static initClass(): void {
         this.prototype.default_view = DpxModalView
         this.prototype.type         = "DpxModal"
-        this.define({
-            title:        [p.String, ""],
-            body:         [p.String, ""],
-            buttons:      [p.String, ""],
-            results:      [p.Any,    {}],
-            submitted:    [p.Number, 0],
-            startdisplay: [p.Number, 0],
-            keycontrol:   [p.Bool,   true],
+        this.override({css_classes: ['dpx-modal', 'dpx-modal-view']})
+        this.define<DpxModal.Props>({
+            title:        [p.String,  ""],
+            body:         [p.String,  ""],
+            buttons:      [p.String,  ""],
+            results:      [p.Any,     {}],
+            submitted:    [p.Number,  0],
+            startdisplay: [p.Number,  0],
+            keycontrol:   [p.Boolean, true],
             callback:     [p.Instance],
         })
     }

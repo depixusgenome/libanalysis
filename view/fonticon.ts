@@ -36,7 +36,7 @@ export class FontIcon extends AbstractIcon {
     static initClass(): void {
         this.prototype.type         = "FontIcon"
         this.prototype.default_view = FontIconView
-        this.define({iconname: [p.String, "cog"]})
+        this.define<FontIcon.Props>({iconname: [p.String, "cog"]})
     }
 }
 FontIcon.initClass()

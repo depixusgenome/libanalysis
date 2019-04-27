@@ -30,7 +30,7 @@ export class DpxHoverTool extends HoverTool {
     constructor(attrs?: Partial<DpxHoverTool.Attrs>) { super(attrs); }
     static initClass(): void {
         this.prototype.default_view = DpxHoverToolView
-        this.define({ maxcount: [ p.Int, 5] })
+        this.define<DpxHoverTool.Props>({ maxcount: [ p.Int, 5] })
     }
 }
 DpxHoverTool.initClass()
