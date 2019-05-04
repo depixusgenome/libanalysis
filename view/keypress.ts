@@ -41,9 +41,11 @@ export class DpxKeyEvent extends Model {
 
     dokeydown(evt: KeyboardEvent): void {
         let val: string = ""
-        let tmp = {'alt': 'Alt', 'shift': 'Shift', 'ctrl': 'Control', 'meta': 'Meta'}
+        let tmp: {[key:string]: string} = {
+            'alt': 'Alt', 'shift': 'Shift', 'ctrl': 'Control', 'meta': 'Meta'
+        }
         for(let name in tmp)
-            if(evt[name+'Key'])
+            if((evt as any as {[key:string] : boolean})[name+'Key'])
                 val += tmp[name]+"-"
 
         if (val == (evt.key+"-"))

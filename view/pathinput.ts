@@ -1,4 +1,3 @@
-import {build_views} from "core/build_views"
 import * as p from "core/properties"
 import {InputWidget, InputWidgetView} from "models/widgets/input_widget"
 
@@ -36,7 +35,7 @@ export class PathInputView extends InputWidgetView {
             +" placeholder='"+this.model.placeholder
             +"' />")
 
-        let btn = (
+        let btn: string = (
             "<button type='button'"
             +" class='bk-bs-btn bk-bs-btn-default'"
             +" style='margin-left:5px'><span class='icon-dpx-folder-plus'></span>"
@@ -57,10 +56,10 @@ export class PathInputView extends InputWidgetView {
         inp.prop("disabled", this.model.disabled)
         inp.change(() => this.change_input())
 
-        let btn = elem.find('button')
-        btn.width(5)
-        btn.prop("disabled", this.model.disabled)
-        btn.click(() => this.change_click())
+        elem = elem.find('button')
+        elem.width(5)
+        elem.prop("disabled", this.model.disabled)
+        elem.click(() => this.change_click())
     }
 
     change_click(): void {

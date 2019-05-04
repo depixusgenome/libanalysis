@@ -1,8 +1,7 @@
 import * as p  from "core/properties"
-import {HoverTool, HoverToolView}              from "models/tools/inspectors/hover_tool"
-import {GlyphRenderer}                         from "models/renderers/glyph_renderer"
-import {Renderer, RendererView}                from "models/renderers/renderer"
-import {Geometry, PointGeometry, SpanGeometry} from "core/geometry"
+import {HoverTool, HoverToolView}    from "models/tools/inspectors/hover_tool"
+import {RendererView}                from "models/renderers/renderer"
+import {PointGeometry, SpanGeometry} from "core/geometry"
 
 export namespace DpxHoverTool {
     export type Attrs = p.AttrsOf<Props>

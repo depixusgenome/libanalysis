@@ -1,6 +1,5 @@
 import *  as p        from "core/properties"
-import {AbstractIcon} from "models/widgets/abstract_icon"
-import {WidgetView}   from "models/widgets/widget"
+import {AbstractIcon, AbstractIconView} from "models/widgets/abstract_icon"
 
 export namespace FontIcon {
     export type Attrs = p.AttrsOf<Props>
@@ -9,7 +8,7 @@ export namespace FontIcon {
 
 export interface FontIcon extends FontIcon.Attrs {}
 
-export class FontIconView extends WidgetView {
+export class FontIconView extends AbstractIconView {
     model: FontIcon
 
     initialize() : void {
@@ -33,6 +32,7 @@ FontIconView.initClass()
 
 export class FontIcon extends AbstractIcon {
     properties: FontIcon.Props
+    constructor(attrs?:Partial<FontIcon.Attrs>) { super(attrs); }
     static initClass(): void {
         this.prototype.type         = "FontIcon"
         this.prototype.default_view = FontIconView
