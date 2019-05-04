@@ -110,8 +110,7 @@ class TabsView(Generic[TThemeType], BokehView):
 
     def __createtabs(self, ind):
         panels = [Panel(title = self.__theme.titles[self.__key(i)],
-                        child = Spacer(),
-                        **self.defaultsizingmode())
+                        child = Spacer())
                   for i in self._panels]
         return Tabs(tabs   = panels,
                     active = ind,

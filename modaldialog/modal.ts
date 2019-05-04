@@ -683,7 +683,6 @@ export class DpxModal extends Model {
     static initClass(): void {
         this.prototype.default_view = DpxModalView
         this.prototype.type         = "DpxModal"
-        this.override({css_classes: ['dpx-modal', 'dpx-modal-view']})
         this.define<DpxModal.Props>({
             title:        [p.String,  ""],
             body:         [p.String,  ""],
