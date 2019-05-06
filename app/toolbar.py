@@ -22,8 +22,12 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
     def __init__(self, ctrl = None, **kwa):
         get = lambda x: cast(type, templateattribute(self, x))
         assert not isinstance(get(0), cast(type, TypeVar))
-        self._bar      = get(0)(ctrl = ctrl, **kwa)
-        self._mainview = get(1)(ctrl = ctrl, **kwa)
+        self._bar      = get(0)(ctrl = ctrl, width = ctrl.APPSIZE[0], **kwa)
+        self._mainview = get(1)(
+            ctrl   = ctrl,
+            width  = ctrl.APPSIZE[0],
+            height = ctrl.APPSIZE[1] - self._bar.gettoolbarheight(),
+            **kwa)
 
     def ismain(self, ctrl):
         "sets-up the main view as main"
@@ -54,7 +58,13 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
         else:
             children = [tbar, others]
 
-        return column(children, sizing_mode = mode, css_classes = ["dpx-tb-layout"])
+        return column(
+            children,
+            sizing_mode = mode,
+            css_classes = ["dpx-tb-layout"],
+            width       = ctrl.APPSIZE[0],
+            height      = ctrl.APPSIZE[1],
+        )
 
 def toolbarview(tbar, main) -> type:
     "return the view with toolbar"

@@ -15,15 +15,16 @@ from modaldialog.builder import changelog
 from view.base           import BokehView
 from version             import timestamp as _timestamp
 
-class TabsTheme:
+class TabsTheme: # pylint: disable=too-many-instance-attributes
     "Tabs Theme"
     CHANGELOG = "CHANGELOG.html"
     def __init__(self, initial: str, panels: Dict[Type, str], version = 0, startup = "") -> None:
         self.name:    str            = "app.tabs"
         self.startup: str            = startup
         self.initial: str            = initial
-        self.width:   int            = 1000
+        self.width:   int            = 1100
         self.height:  int            = 30
+        self.panelheight: int        = 800
         self.titles:  Dict[str, str] = OrderedDict()
         for i, j in panels.items():
             self.titles[j] = getattr(i, 'PANEL_NAME', j.capitalize())
@@ -56,9 +57,13 @@ class TabsView(Generic[TThemeType], BokehView):
     def __init__(self, ctrl = None, **kwa):
         "Sets up the controller"
         super().__init__(ctrl = ctrl, **kwa)
-        mdl           = templateattribute(self, 0)() # type: ignore
-        self.__theme  = ctrl.theme.add(mdl)
-        self.__panels = [cls(ctrl, **kwa) for cls in self.KEYS]
+        mdl             = templateattribute(self, 0)()# type: ignore
+        mdl.width       = kwa.get('width', mdl.width)
+        mdl.panelheight = kwa.get('height', mdl.panelheight+mdl.height)-mdl.height
+        self.__theme    = ctrl.theme.add(mdl)
+
+        kwa.update(width = mdl.width, height = mdl.panelheight)
+        self.__panels   = [cls(ctrl, **kwa) for cls in self.KEYS]
 
         cur = self.__select(self.__initial())
         for panel in self._panels:
@@ -160,7 +165,7 @@ class TabsView(Generic[TThemeType], BokehView):
         one, name = self._addtodoc_oneshot()
         getattr(ctrl, one).oneshot(name, _fcn)
 
-        mode = self.defaultsizingmode()
+        mode = self.defaultsizingmode(width = self.__theme.width, height = self.__theme.height)
         return layouts.row(layouts.widgetbox(tabs, **mode), **mode)
 
     def observe(self, ctrl):
