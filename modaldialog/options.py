@@ -228,8 +228,8 @@ class CSVOption(Option):
         self._cnv  = lambda i: tuple(cnv(j) for j in split(i) if j)
         self._patt = re.compile(self.NAME+patt)
         self._mask = (
-            r'[\d\.,;:]*'   if patt[-1] == 'f' else
-            r'[\d,;:]*'     if patt[-2] == 'd' else
+            r'[\d\.,;:\s]*'   if patt[-1] == 'f' else
+            r'[\d,;:\s]*'     if patt[-2] == 'd' else
             ""
         )
         self._title = (
