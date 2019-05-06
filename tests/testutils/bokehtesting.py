@@ -150,49 +150,7 @@ class WidgetAccess:
             raise KeyError("Could not find "+ self._key)
         return self._docs[0]
 
-class ModalAccess:
-    "Access to selenium driver"
-    def __init__(self, driver: 'SeleniumAccess', btn: str, done = False):
-        self.driver = driver
-        self.cancel = not done
-        self.btn    = btn
-
-    def close(self, done = None):
-        "click on the modal's apply button"
-        if done is None:
-            done = not self.cancel
-
-        self.driver.click(f".dpx-modal-{'done' if done else 'cancel'}")
-
-    def open(self, btn = None):
-        "starts the modal dialog"
-        # pylint: disable=import-error
-        from selenium.common.exceptions import ElementClickInterceptedException
-        for _ in range(3):
-            try:
-                self.driver.click(btn if btn else self.btn)
-            except ElementClickInterceptedException:
-                elem = self.driver[".bbm-wrapper"]
-                if elem:
-                    self.driver.driver.execute_script(
-                        f"arguments[0].style.visibility='hidden'",
-                        elem
-                    )
-            else:
-                break
-
-    def click(self, btn: Optional[str] = None, done: Optional[bool] = None):
-        "opens and closes the dialog"
-        self.open(btn)
-        self.close(done)
-
-    def __enter__(self):
-        self.open()
-
-    def __exit__(self, *_):
-        self.close()
-
-class SeleniumAccess:
+class BaseSeleniumAccess:
     "Access to selenium driver"
     def __init__(self, server):
         self.server = server
@@ -214,15 +172,10 @@ class SeleniumAccess:
             return getattr(self.driver, f"{fcn}xpath")(name)
         raise NotImplementedError()
 
-    def modal(self, btn: str, done: bool = True) -> ModalAccess:
-        "return a ModalAccess"
-        return ModalAccess(self, btn, done)
-
-    def click(self, name, wait = True):
+    def __setitem__(self, name, value):
         "click on a button"
-        self[name].click()
-        if wait:
-            self.server.wait()
+        elem = self[name]
+        self.driver.execute_script(f"arguments[0].setAttribute('value', '{value}')", elem)
 
     def select(self, name, value):
         "select a value in a dropdown"
@@ -239,10 +192,83 @@ class SeleniumAccess:
         "click on a button"
         return self[name].get_attribute("class")
 
-    def __setitem__(self, name, value):
+    def click(self, name, wait = True):
         "click on a button"
-        elem = self[name]
-        self.driver.execute_script(f"arguments[0].setAttribute('value', '{value}')", elem)
+        self[name].click()
+        if wait:
+            self.server.wait()
+
+class ModalAccess(BaseSeleniumAccess):
+    "Access to selenium driver"
+    def __init__(self, server, btn: str, done = False):
+        super().__init__(server)
+        self.cancel = not done
+        self.btn    = btn
+
+    def close(self, done = None):
+        "click on the modal's apply button"
+        if done is None:
+            done = not self.cancel
+
+        super().click(f".dpx-modal-{'done' if done else 'cancel'}")
+
+    def open(self, btn = None):
+        "starts the modal dialog"
+        # pylint: disable=import-error
+        from selenium.common.exceptions import ElementClickInterceptedException
+        for _ in range(3):
+            try:
+                super().click(btn if btn else self.btn)
+            except ElementClickInterceptedException:
+                elem = self.driver[".bbm-wrapper"]
+                if elem:
+                    self.driver.driver.execute_script(
+                        f"arguments[0].style.visibility='hidden'",
+                        elem
+                    )
+            else:
+                break
+
+    def toggle(self, text) -> 'ModalAccess':
+        "sets the input"
+        self.input(text).click()
+        return self
+
+    def input(self, text, value = Ellipsis):
+        "sets the input"
+        txt = f'//td[text()="{text}"]/following::input[1]'
+        if value is Ellipsis:
+            return self[txt]
+
+        self[txt] = value
+        return self
+
+    def tab(self, text) -> 'ModalAccess':
+        "selects a tab"
+        super().click(f'//button[text()="{text}"]', False)
+        return self
+
+    def click( # pylint: disable=arguments-differ
+            self,
+            btn: Optional[str] = None,
+            done: Optional[bool] = None
+    ):
+        "opens and closes the dialog"
+        self.open(btn)
+        self.close(done)
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+class SeleniumAccess(BaseSeleniumAccess):
+    "Access to selenium driver"
+    def modal(self, btn: str, done: bool = True) -> ModalAccess:
+        "return a ModalAccess"
+        return ModalAccess(self.server, btn, done)
 
 class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
