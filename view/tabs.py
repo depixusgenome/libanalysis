@@ -145,6 +145,9 @@ class TabsView(Generic[TThemeType], BokehView):
                 roots[ind] = ret
             return roots[ind]
 
+        mode = self.defaultsizingmode(width = self.__theme.width, height = self.__theme.height)
+        row  = layouts.column(layouts.widgetbox(tabs, **mode), Spacer(), **mode)
+
         @ctrl.action
         def _py_cb(attr, old, new):
             self._panels[old].activate(False)
@@ -153,20 +156,19 @@ class TabsView(Generic[TThemeType], BokehView):
                               ctrl.emitpolicy.outastuple,
                               (lambda: setattr(tabs, 'active', old),))
             if roots[old] is not None:
-                doc.remove_root(roots[old])
-                doc.add_root(_root(new))
+                children = list(row.children)[:-1]
+                row.update(children = children+[_root(new)])
 
         tabs.on_change('active', _py_cb)
 
         def _fcn(**_):
-            itm = next(i for i, j in enumerate(self._panels) if j.plotter.isactive())
-            doc.add_root(_root(itm))
+            itm      = next(i for i, j in enumerate(self._panels) if j.plotter.isactive())
+            children = list(row.children)[:-1]
+            row.update(children = children+[_root(itm)])
 
         one, name = self._addtodoc_oneshot()
         getattr(ctrl, one).oneshot(name, _fcn)
-
-        mode = self.defaultsizingmode(width = self.__theme.width, height = self.__theme.height)
-        return layouts.row(layouts.widgetbox(tabs, **mode), **mode)
+        return row
 
     def observe(self, ctrl):
         "observing the controller"

@@ -31,12 +31,14 @@ def coffee(apath: Union[str,Path], name:Optional[str] = None, **kwa) -> str:
 
 def storedjavascript(inpt, name):
     "get stored javascript"
-    from bokeh.util import compiler
+    import bokeh
+    from   bokeh.util import compiler
     cache   = getattr(compiler, "_bundle_cache")
     force   = False
-    selfkey = compiler.calc_cache_key(
+    selfkey = compiler.calc_cache_key(*(
+        () if bokeh.__version__ == '1.0.4' else
         getattr(compiler, '_get_custom_models')(None)
-    )
+    ))
 
     for path in Path(inpt).glob("*.js"):
         with open(Path(inpt)/path.name, encoding = 'utf-8') as stream:
