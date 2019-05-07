@@ -192,9 +192,9 @@ def test_csv():
     # pylint: disable=line-too-long
     truth = [
         """1 <input type="text" name="first"  value = ""  placeholder="comma separated values"  class='bk-widget-form-input'>""",
-        r"""2 <input type="text" name="second[0]"  value = "1, 2"  placeholder="comma separated integers"  pattern="[\d,;:]*"  title="comma separated integers"  class='bk-widget-form-input'>""",
+        r"""2 <input type="text" name="second[0]"  value = "1, 2"  placeholder="comma separated integers"  pattern="[\d,;:\s]*"  title="comma separated integers"  class='bk-widget-form-input'>""",
         """3 <input type="text" name="third[0].third"  value = "a, b"  placeholder="comma separated values"  class='bk-widget-form-input'>""",
-        r"""4 <input type="text" name="fourth"  value = "1.1, 2.2"  placeholder="comma separated floats"  pattern="[\d\.,;:]*"  title="comma separated floats"  class='bk-widget-form-input'>""",
+        r"""4 <input type="text" name="fourth"  value = "1.1, 2.2"  placeholder="comma separated floats"  pattern="[\d\.,;:\s]*"  title="comma separated floats"  class='bk-widget-form-input'>""",
     ]
     assert body == truth
 
