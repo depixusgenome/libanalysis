@@ -37,7 +37,7 @@ def storedjavascript(inpt, name):
     force   = False
     selfkey = compiler.calc_cache_key(*(
         () if bokeh.__version__ == '1.0.4' else
-        getattr(compiler, '_get_custom_models')(None)
+        (getattr(compiler, '_get_custom_models')(None),)
     ))
 
     for path in Path(inpt).glob("*.js"):
