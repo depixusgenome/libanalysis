@@ -1,5 +1,2 @@
-import wafbuilder
-
-require(python = dict(bokeh = '1.0'),        rtime = True)
-require(nodejs = '10.13.0',                  rtime = False)
+require(python = dict(bokeh = '1.0.4'), rtime = True)
 make(locals())
