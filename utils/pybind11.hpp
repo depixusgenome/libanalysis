@@ -20,14 +20,22 @@
 # endif
 #endif
 #include <pybind11/pybind11.h>
-#ifndef PYBIND11_HAS_VARIANT
-# define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
-#endif
-#ifndef PYBIND11_HAS_EXP_OPTIONAL
-# define PYBIND11_HAS_EXP_OPTIONAL 0
-#endif
-#ifndef PYBIND11_HAS_OPTIONAL
-# define PYBIND11_HAS_OPTIONAL 0
+#ifdef PYBIND11_CPP17
+# ifndef PYBIND11_HAS_EXP_OPTIONAL
+#  define PYBIND11_HAS_EXP_OPTIONAL 0      // remove compile-time warnings
+# endif
+#else
+# ifdef PYBIND11_CPP14
+#  ifndef PYBIND11_HAS_VARIANT
+#   define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
+#  endif
+#  ifndef PYBIND11_HAS_EXP_OPTIONAL
+#   define PYBIND11_HAS_EXP_OPTIONAL 0
+#  endif
+#  ifndef PYBIND11_HAS_OPTIONAL
+#   define PYBIND11_HAS_OPTIONAL 0
+#  endif
+# endif
 #endif
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
