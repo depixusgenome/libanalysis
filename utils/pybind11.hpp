@@ -2,30 +2,18 @@
 #include <vector>
 #include <valarray>
 #include <type_traits>
+#include "utils/boostwarnings.h"
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/preprocessor/seq.hpp>
 #include <boost/preprocessor/seq/cat.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
-#ifdef __GNUC__
-# ifdef __clang__
-#   if (__clang_major__ <= 8)
-#     pragma GCC diagnostic push
-#     pragma GCC diagnostic ignored "-Wmissing-noreturn"
-#   endif
-# else
-#   if (__GNUC__ == 8 && __GNUC_MINOR__ <= 3)
-#     pragma GCC diagnostic push
-#     pragma GCC diagnostic ignored "-Wcast-function-type"
-#   endif
-# endif
-#endif
 #include <pybind11/pybind11.h>
 #ifdef PYBIND11_CPP17
 # ifndef PYBIND11_HAS_EXP_OPTIONAL
 #  define PYBIND11_HAS_EXP_OPTIONAL 0      // remove compile-time warnings
 # endif
 #else
-# ifdef PYBIND11_CPP14
+# ifdef PYBIND11_CPP15
 #  ifndef PYBIND11_HAS_VARIANT
 #   define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
 #  endif
@@ -39,17 +27,7 @@
 #endif
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#ifdef __GNUC__
-# ifdef __clang__
-#   if (__clang_major__ <= 8)
-#     pragma GCC diagnostic pop
-#   endif
-# else
-#   if (__GNUC__ == 8 && __GNUC_MINOR__ <= 3)
-#     pragma GCC diagnostic pop
-#   endif
-# endif
-#endif
+#include "utils/boostwarnings.h"
 
 
 #define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
