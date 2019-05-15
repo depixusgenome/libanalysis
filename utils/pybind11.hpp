@@ -2,32 +2,7 @@
 #include <vector>
 #include <valarray>
 #include <type_traits>
-#include "utils/boostwarnings.h"
-#include <boost/preprocessor/stringize.hpp>
-#include <boost/preprocessor/seq.hpp>
-#include <boost/preprocessor/seq/cat.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
-#include <pybind11/pybind11.h>
-#ifdef PYBIND11_CPP17
-# ifndef PYBIND11_HAS_EXP_OPTIONAL
-#  define PYBIND11_HAS_EXP_OPTIONAL 0      // remove compile-time warnings
-# endif
-#else
-# ifdef PYBIND11_CPP15
-#  ifndef PYBIND11_HAS_VARIANT
-#   define PYBIND11_HAS_VARIANT 0      // remove compile-time warnings
-#  endif
-#  ifndef PYBIND11_HAS_EXP_OPTIONAL
-#   define PYBIND11_HAS_EXP_OPTIONAL 0
-#  endif
-#  ifndef PYBIND11_HAS_OPTIONAL
-#   define PYBIND11_HAS_OPTIONAL 0
-#  endif
-# endif
-#endif
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-#include "utils/boostwarnings.h"
+#include "utils/pybind11_boost.h"
 
 
 #define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
