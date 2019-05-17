@@ -2,7 +2,13 @@
 #include <vector>
 #include <valarray>
 #include <type_traits>
-#include "utils/pybind11_boost.h"
+#include <boost/preprocessor/stringize.hpp>
+#include <boost/preprocessor/seq.hpp>
+#include <boost/preprocessor/seq/cat.hpp>
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 
 #define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
