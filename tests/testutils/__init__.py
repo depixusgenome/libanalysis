@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """ access to files """
-from    typing import Union, Sequence, Optional, Dict, Any, cast
+from    importlib import import_module
+from    pathlib   import Path
+from    typing    import Union, Sequence, Dict, Any
 import  os
 import  sys
-import  json
 import  warnings
-from    pathlib import Path
-from    pytest  import mark
+from    pytest    import mark, fixture, param
 import  numpy as np
 
 NO_DISPLAY      = not (sys.platform.startswith("win") or 'DISPLAY' in os.environ)
 integrationmark = mark.integration  # pylint: disable=invalid-name
 needsdisplay    = mark.needsdisplay # pylint: disable=invalid-name
+
+@fixture(params = [param("", marks = needsdisplay)])
+def bokehaction(monkeypatch):
+    """
+    Create a BokehAction fixture.
+    BokehAction.view is the created view. Any of its protected attribute can
+    be accessed directly, for example BokehAction.view._ctrl  can be accessed
+    through BokehAction.ctrl.
+    """
+    with import_module("tests.testingcore.bokehtesting").BokehAction(monkeypatch) as act:
+        yield act
 
 warnings.filterwarnings('error', category = FutureWarning)
 warnings.filterwarnings('error', category = DeprecationWarning)

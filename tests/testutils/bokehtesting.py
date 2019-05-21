@@ -212,6 +212,14 @@ class ModalAccess(BaseSeleniumAccess):
 
         super().click(f".dpx-modal-{'done' if done else 'cancel'}")
 
+    def isdisplayed(self) -> bool:
+        "checks whether it's open"
+        from selenium.common.exceptions import NoSuchElementException
+        try:
+            return self[".dpx-modal-done"].is_displayed()
+        except NoSuchElementException:
+            return False
+
     def open(self, btn = None):
         "starts the modal dialog"
         # pylint: disable=import-error
