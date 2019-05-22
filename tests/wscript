@@ -1,1 +1,12 @@
-make(doremove = False)
+#!/usr/bin/env python3
+# encoding: utf-8
+import wafbuilder
+def build(bld):
+    pysrc = bld.path.ant_glob('**/*.py')
+    cfe   = bld.path.ant_glob('**/*.ts')
+
+    wafbuilder.checkpy  (bld, 'tests', pysrc, 'pylint')
+    wafbuilder.copyfiles(bld, wafbuilder.appname(), pysrc)
+    wafbuilder.copyfiles(bld, wafbuilder.appname(), cfe)
+
+make(locals(), doremove = False)
