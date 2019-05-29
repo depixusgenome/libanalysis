@@ -179,7 +179,7 @@ class TabsView(Generic[TThemeType], BokehView):
         mdl  = self.__theme
         cur  = ctrl.theme.get(mdl, 'version')
         vers = ctrl.theme.get(mdl, 'version', defaultmodel = True)
-        if cur > vers:
+        if None in (cur, vers) or cur > vers:
             return
         msg = ctrl.theme.get(mdl, 'startup')
         if msg == "":
