@@ -76,18 +76,6 @@ def _from_module(view):
                               fromlist = view[view.rfind('.')+1:])
     return getattr(viewmod, view[view.rfind('.')+1:])
 
-def _win_opts():
-    if sys.platform.startswith("win"):
-        # Get rid of console windows
-        import bokeh.util.compiler as compiler # pylint: disable=useless-import-alias
-        # First find the nodejs path. This must be done with shell == False
-        compiler._nodejs_path() # pylint: disable=protected-access
-        # Now set shell == True to get rid of consoles
-        def _Popen(*args, **kwargs):
-            kwargs['shell'] = True
-            return subprocess.Popen(*args, **kwargs)
-        compiler.Popen = _Popen
-
 def _debug(raiseerr, nothreading):
     if nothreading:
         import view.base as _base
@@ -184,7 +172,6 @@ def defaultinit(config, wall, raiseerr, nothreading):
         LOGS.info("done loading in %d seconds", time()-start)
 
     _config(config)
-    _win_opts()
     _debug(raiseerr, nothreading)
 
 # pylint: disable=too-many-arguments
