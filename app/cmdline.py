@@ -6,8 +6,6 @@ from   pathlib   import Path
 from   time      import time
 from   functools import partial
 import logging
-import sys
-import subprocess
 import inspect
 import warnings
 
