@@ -43,7 +43,7 @@ def storedjavascript(inpt, name):
     for path in Path(inpt).glob("*.js"):
         with open(Path(inpt)/path.name, encoding = 'utf-8') as stream:
             out = stream.readlines()
-        key = out[0][len("/*KEY="):-len("*/\n")]
+        key = out[0].strip()[len("/*KEY="):-len("*/")]
         if key.lower() == name.lower():
             cache[selfkey] = "".join(out[1:])
             force                            = True
