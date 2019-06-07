@@ -65,7 +65,7 @@ def _configure_hv(hvmod, locs):
         del warnings
 
         try:
-            import holoviews  as     hv
+            import holoviews  as     hv  # pylint: disable=import-error
             __import__('IPython').get_ipython().magic('output size=150')
 
             opts  = locs.get("HV_OPTS", {})
@@ -109,6 +109,7 @@ def importjupyter(locs, *names):
     "imports the relative jupyter package"
     if _isjupyter():
         try:
+            # pylint: disable=import-error
             import holoviews as hv
             import holoviews.operation  as hvops
             from .holoviewing import dropdown
