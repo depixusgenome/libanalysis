@@ -3,6 +3,7 @@
 "The main controller"
 import sys
 from   contextlib              import contextmanager
+from   copy                    import deepcopy
 from   typing                  import Dict, Any
 
 import bokeh.models as _models
@@ -47,25 +48,44 @@ class ThemeController(DecentralizedController):
 
     def updatetheme(self, doc:Document, **values):
         "change the theme"
-        theme = doc.theme
-        cur   = dict(getattr(theme, '_json')['attrs'], **getattr(theme, '_by_class_cache'))
+        theme  = doc.theme
+        cur    = deepcopy(dict(
+            getattr(theme, '_json')['attrs'],
+            **getattr(theme, '_by_class_cache')
+        ))
+        isdiff = False
         for i, j in values.items():
             if isinstance(j, dict):
-                cur[i] = dict(cur[i], **j)
+                tmp = dict(cur[i], **j)
+                if tmp and tmp != j:
+                    cur[i] = tmp
+                    isdiff = True
 
             elif i.startswith("font"):
                 for name, attrs in cur.items():
                     lst = dict((k, j) for k in attrs if k.endswith(i))
-                    if len(lst):
-                        cur[name] = dict(attrs, **lst)
+                    tmp = dict(attrs, **lst)
+                    if tmp and tmp != attrs:
+                        cur[name] = tmp
+                        isdiff    = True
 
             else:
                 for name, attrs in cur.items():
                     if hasattr(getattr(_models, name, None), i):
-                        cur[name] = dict(attrs, **{i: j})
+                        tmp = dict(attrs, **{i: j})
+                        if 'font_size' in i and j is None:
+                            tmp.pop(i)
+                        if tmp and tmp != attrs:
+                            cur[name] = tmp
+                            isdiff    = True
 
-        name = 'custom' + ('dark' if 'dark' in self.model("main").themename else 'light')
-        self.update("main", **{name: {"attrs": cur}, 'themename': name})
+        if isdiff:
+            cur = {
+                i: j
+                for i,j in cur.items() if not isinstance(j, dict) or j
+            }
+            name = 'custom' + ('dark' if 'dark' in self.model("main").themename else 'light')
+            self.update("main", **{name: {"attrs": cur}, 'themename': name})
 
     @staticmethod
     def gettheme(doc:Document, attr: str):
