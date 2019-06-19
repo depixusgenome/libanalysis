@@ -11,6 +11,7 @@ import pathlib
 import pytest
 import numpy as np
 from   utils              import escapenans, fromstream
+from   utils.array        import popclip
 from   utils.decoration   import addto, extend, addproperty
 from   utils.gui          import intlistsummary, parseints, leastcommonkeys
 from   utils.datadump     import LazyShelf
@@ -685,6 +686,21 @@ def test_rescaler():
         'aaa': 1., 'bbb': [1., 'mmm'], 'ccc': {1.: 1.},
         'ddd': 1., 'eee': {1.}, 'fff': (1.,)
     }
+
+def test_popclip():
+    "test rescaler"
+    vals = np.zeros(300, dtype = 'f4')
+    vals[:150] = 1.
+    vals[0]    = -.101
+    vals[1]    = -.09
+    vals[-2]   = 1.09
+    vals[-1]   = 1.101
+    vals[150]  = np.NaN
+
+    arr = np.copy(vals)
+    popclip(arr)
+    np.testing.assert_equal(vals[1:-1], arr[1:-1])
+    assert np.all(np.isnan(arr[[0,-1]]))
 
 if __name__ == '__main__':
     test_rescaler()

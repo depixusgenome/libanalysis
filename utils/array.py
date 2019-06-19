@@ -114,3 +114,17 @@ def repeat(data, count, axis = 1):
     if axis == 1:
         return np.repeat(data, count)
     return np.repeat(np.asarray(data)[np.newaxis], count, axis = 0).ravel()
+
+def popclip(
+        out:    np.ndarray,
+        rng:    float = 99.,
+        ratio:  float = .1,
+        replace:float = np.NaN
+) -> np.ndarray:
+    "clip values sitting outside a dynamic range"
+    clip = np.nanpercentile(out, [100-rng, rng])
+    clip = clip[0] - (clip[1]-clip[0]) * ratio, clip[1] + (clip[1]-clip[0]) * ratio
+    out[np.isnan(out)]  = clip[1]
+    out[out >= clip[1]] = replace
+    out[out <= clip[0]] = replace
+    return out
