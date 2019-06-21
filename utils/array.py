@@ -124,7 +124,6 @@ def popclip(
     "clip values sitting outside a dynamic range"
     clip = np.nanpercentile(out, [100-rng, rng])
     clip = clip[0] - (clip[1]-clip[0]) * ratio, clip[1] + (clip[1]-clip[0]) * ratio
-    out[np.isnan(out)]  = clip[1]
-    out[out >= clip[1]] = replace
-    out[out <= clip[0]] = replace
+    out[np.isnan(out)]                       = clip[1]
+    out[(out >= clip[1]) | (out <= clip[0])] = replace
     return out
