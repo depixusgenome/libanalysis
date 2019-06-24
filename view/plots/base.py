@@ -483,16 +483,12 @@ class AxisOberver:
                         max_interval = 1., min_interval = 1.,
                         reset_start  = 0., reset_end    = 1.)
 
-        if isinstance(arr, np.ndarray):
-            if all(np.isnan(i) for i in arr) or len(arr) == 0:
-                vmin = 0.
-                vmax = 1.
-            else:
-                vmin = np.nanmin(arr)
-                vmax = np.nanmax(arr)
-        elif len(arr):
-            vmin = min(arr)
-            vmax = max(arr)
+        vmin = np.nanmin(arr)
+        if np.isnan(vmin):
+            vmin = 0.
+        vmax = np.nanmax(arr)
+        if np.isnan(vmax):
+            vmax = vmin + 1.
 
         theme = self._ctrl.theme.model(self._theme)
         rng   = max(1e-5, (vmax-vmin))
@@ -542,13 +538,12 @@ class AxisOberver:
         if len(arr) == 0:
             return 0., 1.
 
-        if isinstance(arr, np.ndarray):
-            good  = arr[np.isfinite(arr)]
-            vmin  = good.min()
-            vmax  = good.max()
-        else:
-            vmin  = min(arr)
-            vmax  = max(arr)
+        vmin  = np.nanmin(arr)
+        if np.isnan(vmin):
+            vmin = 0.
+        vmax  = np.nanmax(arr)
+        if np.isnan(vmax):
+            vmax = vmin+1.
 
         delta = (vmax-vmin)*self._ctrl.theme.get(self._theme, "overshoot")
         vmin -= delta
