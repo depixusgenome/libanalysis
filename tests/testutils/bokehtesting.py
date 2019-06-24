@@ -285,12 +285,6 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     """
     loop     = property(lambda self: self.server.io_loop)
     ctrl     = property(lambda self: getattr(self.view, '_ctrl'))
-    roottask = property(lambda self: self.ctrl.display.get("tasks", "roottask"))
-    track    = property(lambda self: self.ctrl.tasks.track(self.roottask))
-    def task(self, task):
-        "returns a task"
-        return self.ctrl.tasks.task(self.roottask, task)
-
     @property
     def loading(self) -> Optional[DpxTestLoaded]:
         "returns the model which allows tests to javascript"
