@@ -219,6 +219,6 @@ def labelsizes(elem = None, axistitles = None, ticks = None):
         return _setsizes
 
     assert isinstance(elem, hv.Element)
-    return elem.options(finalize_hooks = [elem])
+    return elem.options(finalize_hooks = [_setsizes])
 
 __all__ = ['addto', 'displayhook', 'addproperty', "labelsizes", "dropdown"]
