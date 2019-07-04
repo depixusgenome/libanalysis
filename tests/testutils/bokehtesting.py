@@ -566,6 +566,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 
         self.monkeypatch.setattr(view.dialog, '_tkopen', _tkopen)
         self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_HAS_ZENITY', False)
+        self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_calltk', _tkopen)
         if andpress:
             self.press('Control-o',rendered = rendered, **kwa)
 
@@ -620,6 +621,8 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
                     return self.path(withpath)
                 fcn = _tkopen2
             self.monkeypatch.setattr(view.dialog, '_tkopen', fcn)
+            self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_HAS_ZENITY', False)
+            self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_calltk', fcn)
 
         if browser:
             self.cmd(cast(DpxTestLoaded, self.loading).change, mdl, attrs, value,
