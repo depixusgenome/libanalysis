@@ -44,7 +44,9 @@ def displayhook(cls, *args):
     "Adds the class as a hook"
     shell = get_ipython()
     if shell is None:
-        return cls
+        if isinstance(cls, type):
+            return cls
+        return lambda x: x
 
     fmt = shell.display_formatter.formatters['text/html']
     if isinstance(cls, type):

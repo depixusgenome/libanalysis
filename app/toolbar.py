@@ -22,12 +22,14 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
     def __init__(self, ctrl = None, **kwa):
         get = lambda x: cast(type, templateattribute(self, x))
         assert not isinstance(get(0), cast(type, TypeVar))
-        self._bar      = get(0)(ctrl = ctrl, width = ctrl.APPSIZE[0], **kwa)
-        self._mainview = get(1)(
-            ctrl   = ctrl,
-            width  = ctrl.APPSIZE[0],
-            height = ctrl.APPSIZE[1] - self._bar.gettoolbarheight(),
-            **kwa)
+        theme     = ctrl.theme.model("theme")
+        self._bar = get(0)(ctrl = ctrl, width = theme.appsize[0], **kwa)
+
+        ctrl.theme.updatedefaults(
+            "theme",
+            tabheight = theme.appsize[1] - self._bar.gettoolbarheight()
+        )
+        self._mainview  = get(1)(ctrl = ctrl, **kwa)
 
     def ismain(self, ctrl):
         "sets-up the main view as main"
@@ -45,9 +47,10 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
 
     def addtodoc(self, ctrl, doc):
         "adds items to doc"
-        tbar   = self._bar.addtodoc(ctrl, doc)
-        others = self._mainview.addtodoc(ctrl, doc)
-        mode   = ctrl.theme.get('main', 'sizingmode')
+        tbar    = self._bar.addtodoc(ctrl, doc)
+        others  = self._mainview.addtodoc(ctrl, doc)
+        appsize = ctrl.theme.get("theme", "appsize")
+        mode    = ctrl.theme.get('main', 'sizingmode')
         while isinstance(others, (tuple, list)) and len(others) == 1:
             others = others[0]
 
@@ -62,8 +65,8 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
             children,
             sizing_mode = mode,
             css_classes = ["dpx-tb-layout"],
-            width       = ctrl.APPSIZE[0],
-            height      = ctrl.APPSIZE[1],
+            width       = appsize[0],
+            height      = appsize[1],
         )
 
 def toolbarview(tbar, main) -> type:

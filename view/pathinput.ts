@@ -8,7 +8,7 @@ export namespace PathInput {
     export type Props = InputWidget.Props & {
         value:       p.Property<string>
         placeholder: p.Property<string>
-        click:       p.Property<number>
+        clicks:      p.Property<number>
     }
 }
 
@@ -28,7 +28,7 @@ export class PathInputView extends InputWidgetView {
             label = "<label for="+this.model.id+"> "+this.model.title+" </label>"
 
         let txt = (
-            "<input class='bk-widget-form-input' type='text'"
+            `<input class='bk bk-input' type='text'`
             +" id="+this.model.id
             +" name="+this.model.name
             +" value='"+this.model.value+"'"
@@ -37,8 +37,9 @@ export class PathInputView extends InputWidgetView {
 
         let btn: string = (
             "<button type='button'"
-            +" class='bk-bs-btn bk-bs-btn-default'"
-            +" style='margin-left:5px'><span class='icon-dpx-folder-plus'></span>"
+            +` class='bk bk-btn bk-btn-default'`
+            +" style='margin-left:5px; width:18px; height: 19px; margin-bottom:4px'>"
+            +"<span class='icon-dpx-folder-plus'></span>"
             +"</button>"
         )
 
@@ -51,19 +52,18 @@ export class PathInputView extends InputWidgetView {
             // TODO - This 35 is a hack we should be able to compute it
             inp.height(this.model.height - 35)
         if(this.model.width)
-            inp.width(this.model.width-50)
+            inp.width(this.model.width-75)
 
         inp.prop("disabled", this.model.disabled)
         inp.change(() => this.change_input())
 
         elem = elem.find('button')
-        elem.width(5)
         elem.prop("disabled", this.model.disabled)
         elem.click(() => this.change_click())
     }
 
     change_click(): void {
-        this.model.click = this.model.click+1
+        this.model.clicks = this.model.clicks+1
     }
 
     change_input(): void {
@@ -82,7 +82,7 @@ export class PathInput extends InputWidget {
         this.define<PathInput.Props>({
             value:       [p.String, ""],
             placeholder: [p.String, ""],
-            click:       [p.Number, 0],
+            clicks:      [p.Number, 0],
         })
     }
 }

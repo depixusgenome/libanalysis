@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "basic view module"
+from typing                     import Dict
 from abc                        import ABC
 from asyncio                    import wrap_future
 from concurrent.futures         import ThreadPoolExecutor
@@ -55,6 +56,13 @@ def defaultsizingmode(self, kwa:dict = None, ctrl = None, **kwargs) -> dict:
     kwa['sizing_mode'] = theme.get('main', 'sizingmode', 'fixed')
     return kwa
 
+def defaulttabsize(ctrl) -> Dict[str, int]:
+    "the default sizing mode"
+    return dict(
+        width  = ctrl.theme.get("theme", "appsize")[0],
+        height = ctrl.theme.get("theme", "tabheight")
+    )
+
 class BokehView(View):
     "A view with a gui"
     def __init__(self, ctrl = None, **kwargs):
@@ -70,6 +78,11 @@ class BokehView(View):
     def addtodoc(self, _, doc):
         "Adds one's self to doc"
         self._doc = doc
+
+    @staticmethod
+    def defaulttabsize(ctrl) -> Dict[str, int]:
+        "the default tab size"
+        return defaulttabsize(ctrl)
 
     def defaultsizingmode(self, kwa = None, **kwargs) -> dict:
         "the default sizing mode"

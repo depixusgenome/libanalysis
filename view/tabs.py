@@ -58,12 +58,14 @@ class TabsView(Generic[TThemeType], BokehView):
         "Sets up the controller"
         super().__init__(ctrl = ctrl, **kwa)
         mdl             = templateattribute(self, 0)()# type: ignore
-        mdl.width       = kwa.get('width', mdl.width)
-        mdl.panelheight = kwa.get('height', mdl.panelheight+mdl.height)-mdl.height
+        mdl.width       = kwa.get('width',  ctrl.theme.get("theme", 'appsize')[0])
+        mdl.panelheight = (
+            kwa.get('height', ctrl.theme.get("theme", 'tabheight'))
+            -mdl.height
+        )
         self.__theme    = ctrl.theme.add(mdl)
-
-        kwa.update(width = mdl.width, height = mdl.panelheight)
-        self.__panels   = [cls(ctrl, **kwa) for cls in self.KEYS]
+        ctrl.theme.updatedefaults("theme", tabheight = mdl.panelheight)
+        self.__panels   = [cls(ctrl) for cls in self.KEYS]
 
         cur = self.__select(self.__initial())
         for panel in self._panels:
@@ -114,9 +116,12 @@ class TabsView(Generic[TThemeType], BokehView):
         return ind
 
     def __createtabs(self, ind):
-        panels = [Panel(title = self.__theme.titles[self.__key(i)],
-                        child = Spacer())
-                  for i in self._panels]
+        panels = [
+            Panel(
+                title = self.__theme.titles[self.__key(i)],
+                child = Spacer(width  = self.__theme.width, height = 0)
+            )
+            for i in self._panels]
         return Tabs(tabs   = panels,
                     active = ind,
                     name   = self.NAME,
@@ -146,7 +151,11 @@ class TabsView(Generic[TThemeType], BokehView):
             return roots[ind]
 
         mode = self.defaultsizingmode(width = self.__theme.width, height = self.__theme.height)
-        row  = layouts.column(layouts.widgetbox(tabs, **mode), Spacer(), **mode)
+        row  = layouts.column(
+            layouts.widgetbox(tabs, **mode),
+            Spacer(width = self.__theme.width, height = 0),
+            **mode
+        )
 
         @ctrl.action
         def _py_cb(attr, old, new):

@@ -598,7 +598,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     def click(self, model: Union[str,dict,Model], **kwa):
         "Clicks on a button on the browser side"
         mdl = self.widget.get(model)
-        self.change(mdl, 'click', mdl.click+1, **kwa)
+        self.change(mdl, 'clicks', mdl.clicks+1, **kwa)
 
     def change(self,        # pylint: disable=too-many-arguments
                model: Union[str,dict,Model],
