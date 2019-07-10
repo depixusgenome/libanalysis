@@ -59,11 +59,10 @@ class DpxModal(Model):
         self.startdisplay   = self.startdisplay+1
 
     def _onresults_cb(self, attr, old, new):
-        if self.__running and not self.__always and len(new) and self.__handler:
-            self.__handler(new)
+        pass
 
     def _onsubmitted_cb(self, attr, old, new):
-        if self.__running and self.__always and self.__handler:
+        if self.__running and self.__handler and (self.__always or len(self.results)):
             self.__handler(self.results)
 
         self.__running = False

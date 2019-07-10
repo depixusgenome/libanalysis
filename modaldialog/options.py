@@ -3,7 +3,9 @@
 """
 Optionos to be used by the modal dialog
 """
-from    typing                  import Callable, ContextManager, Union, Dict, Any, cast
+from    typing                  import (
+    Callable, ContextManager, Union, Dict, Any, Tuple, cast
+)
 from    functools               import partial
 from    abc                     import ABCMeta, abstractmethod
 from    contextlib              import contextmanager
@@ -93,19 +95,61 @@ class Option(metaclass = ABCMeta):
         if isinstance(mdl, dict):
             mdl[keystr] = val
         else:
-            keys = keystr.split('.')
+            keys     = keystr.split('.')
+            old, mdl = self.__getancestors(mdl, keys)
+            if self.__setsequence(old, mdl, keys, val):
+                if self.__setnamedtuple(old, mdl, keys, val):
+                    self.__setattr(mdl, keys, val)
+
+    @classmethod
+    def __getancestors(cls, mdl, keys) -> Tuple[Any, Any]:
+        root = old = mdl
+        try:
             for key in keys[:-1]:
-                match = self._INDEX.match(key)
+                match = cls._INDEX.match(key)
+                old   = mdl
                 if match:
                     mdl = getattr(mdl, match.group(1))[int(match.group(2))]
                 else:
                     mdl = getattr(mdl, key)
+        except AttributeError as exc:
+            raise AttributeError(f"Can't get {root}.{'.'.join(keys[-1])}") from exc
+        return old, mdl
 
-            match = self._INDEX.match(keys[-1])
-            if match:
-                getattr(mdl, match.group(1))[int(match.group(2))] = val
+    @classmethod
+    def __setsequence(cls, old, mdl, keys, val) -> bool:
+        match    = cls._INDEX.match(keys[-1])
+        if match is None:
+            return True
+        try:
+            ind = int(match.group(2))
+            if isinstance(mdl, tuple):
+                val = type(mdl)(*(val if i == ind else mdl[i] for i in range(len(mdl))))
+                setattr(old, keys[-2], val)
             else:
-                setattr(mdl, keys[-1], val)
+                getattr(mdl, match.group(1))[ind] = val
+        except AttributeError as exc:
+            raise AttributeError(f"Can't set {mdl}{keys[-1]} = {val}") from exc
+        return False
+
+    @classmethod
+    def __setnamedtuple(cls, old, mdl, keys, val) -> bool:
+        if not isinstance(mdl, tuple):
+            return True
+        try:
+            ind = getattr(type(mdl), '_fields').index(keys[-1])
+            val = type(mdl)(*(val if i == ind else mdl[i] for i in range(len(mdl))))
+            setattr(old, keys[-2], val)
+        except AttributeError as exc:
+            raise AttributeError(f"Can't set {old}.{keys[-2]} = {val}") from exc
+        return False
+
+    @classmethod
+    def __setattr(cls, mdl, keys, val):
+        try:
+            setattr(mdl, keys[-1], val)
+        except AttributeError as exc:
+            raise AttributeError(f"Can't set {mdl}.{keys[-1]} = {val}") from exc
 
 class ChoiceOption(Option):
     "Converts a text tag to an html check"
@@ -121,12 +165,16 @@ class ChoiceOption(Option):
             key   = match.group('name')
             attr  = match.group('attr') or ''
             ident = key+str(random.randint(0,100000))
-            out   = '<select name="{}" id="{}" {}>'.format(key, ident, attr)
             val   = ''
-            for i in match.group('cols')[1:].split("|"):
-                val = self.getvalue(model, key, i.split(":")[0])
-                break
+            try:
+                for i in match.group('cols')[1:].split("|"):
+                    val = self.getvalue(model, key, i.split(":")[0])
+                    break
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.exception(exc)
+                attr += " disabled='true'"
 
+            out = '<select name="{}" id="{}" {}>'.format(key, ident, attr)
             for i in match.group('cols')[1:].split("|"):
                 i    = i.split(':')
                 sel  = 'selected="selected" ' if i[0] == str(val) else ""
@@ -160,7 +208,13 @@ class CheckOption(Option):
                 "bk bk-input"
             )
             assert len(key), "keys must have a name"
-            val = 'checked' if bool(self.getvalue(model, key, False)) else ''
+            val = ''
+            try:
+                if bool(self.getvalue(model, key, False)):
+                    val = "checked"
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.exception(exc)
+                attr += " disabled='true'"
             return (
                 '<div class ="bk bk-input-group">'
                 +'<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
@@ -191,9 +245,13 @@ class TextOption(Option):
             if info.get("fmt", "s").upper() == info.get("fmt", "s"):
                 opt += " min=0"
 
-            opt += self.__value(model, key, info)
-
             attr  = info.get('attr', '') or ''
+            try:
+                opt += self.__value(model, key, info)
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.exception(exc)
+                attr += " disabled='true'"
+
             if info.get('width', None):
                 attr = self._addtoattr(attr, "style", f'min-width: {info["width"]}px;')
             attr = self._addtoattr(attr, "class", 'bk bk-input')
@@ -254,7 +312,13 @@ class CSVOption(Option):
             assert len(key), "keys must have a name"
             attr = match.group("attr") or ''
 
-            val  = self.getvalue(model, key, None)
+            val  = None
+            try:
+                val  = self.getvalue(model, key, None)
+            except Exception as exc: # pylint: disable=broad-except
+                LOGS.exception(exc)
+                attr += " disabled='true'"
+
             opt  = f""" value = "{', '.join(str(i) for i in val) if val else ''}" """
             if "placeholder" not in attr:
                 opt += f' placeholder="comma separated {self._title}" '
@@ -321,24 +385,28 @@ def fromhtml(
         **kwa
 ):
     "extract changes from the html"
-    if isinstance(body, (list, tuple)):
-        if len(body) and hasattr(body[0], 'body'):
-            body = sum((tuple(i.body) for i in body), ())
-        body = ' '.join(
-            ' '.join(k if isinstance(k, str) else k[1] for k in i)
-            for i in body
-        )
+    try:
+        if isinstance(body, (list, tuple)):
+            if len(body) and hasattr(body[0], 'body'):
+                body = sum((tuple(i.body) for i in body), ())
+            body = ' '.join(
+                ' '.join(k if isinstance(k, str) else k[1] for k in i)
+                for i in body
+            )
 
-    converters = [i.converter(model, body) for i in OPTIONS]
-    ordered    = sorted(itms.items(), key = lambda i: body.index('%('+i[0]))
-    if context is None:
-        for i in ordered:
-            any(cnv(*i) for cnv in converters)
-    elif isinstance(context, ContextManager):
-        with context:
+        converters = [i.converter(model, body) for i in OPTIONS]
+        ordered    = sorted(itms.items(), key = lambda i: body.index('%('+i[0]))
+        if context is None:
             for i in ordered:
                 any(cnv(*i) for cnv in converters)
-    else:
-        with context(**kwa):
-            for i in ordered:
-                any(cnv(*i) for cnv in converters)
+        elif isinstance(context, ContextManager):
+            with context:
+                for i in ordered:
+                    any(cnv(*i) for cnv in converters)
+        else:
+            with context(**kwa):
+                for i in ordered:
+                    any(cnv(*i) for cnv in converters)
+    except Exception as exc: # pylint: disable=broad-except
+        LOGS.exception(exc)
+        raise
