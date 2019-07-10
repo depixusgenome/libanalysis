@@ -3,7 +3,8 @@
 """
 basic theme
 """
-from utils import dflt, dataclass
+from typing import List
+from utils  import dflt, dataclass
 
 DARK = {"Figure" : {"background_fill_color": "#20262B",
                     "border_fill_color": "#15191C",
@@ -25,6 +26,18 @@ DARK = {"Figure" : {"background_fill_color": "#20262B",
                     "background_fill_color": "#15191C",
                     "bar_line_alpha": 0},
         "Title":   {"text_color": "#E0E0E0"}}
+
+@dataclass
+class AppTheme:
+    """
+    main theme
+    """
+    name:        str       = 'theme'
+    tabheight:   int       = 1000
+    appsize:     List[int] = dflt([1200, tabheight])
+    borders:     int       = 5
+    figtbheight: int       = 48
+    appname:     str       = ''
 
 @dataclass
 class MainTheme:

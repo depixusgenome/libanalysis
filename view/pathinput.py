@@ -17,4 +17,4 @@ class PathInput(InputWidget):
     widget by hitting Enter or clicking outside of the text box area.
     """)
     placeholder = String(default="", help="Placeholder for empty input field")
-    click       = Int(default = 0)
+    clicks      = Int(default = 0)

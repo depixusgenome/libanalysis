@@ -23,8 +23,11 @@ from    model.plots             import (PlotAttrs, PlotState, PlotModel,
                                         PlotDisplay, PlotTheme)
 from    utils.logconfig         import getLogger
 from    utils.inspection        import templateattribute
-from    ..base                  import (BokehView, spawn, SINGLE_THREAD, threadmethod,
-                                        defaultsizingmode as _defaultsizingmode)
+from    ..base                  import (
+    BokehView, spawn, SINGLE_THREAD, threadmethod,
+    defaultsizingmode as _defaultsizingmode,
+    defaulttabsize as _defaulttabsize
+)
 from    ..colors                import tohex
 from    .bokehext               import DpxKeyedRow, DpxHoverTool
 
@@ -676,6 +679,11 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
     def defaultsizingmode(self, kwa = None, **kwargs):
         "the default sizing mode"
         return _defaultsizingmode(self, kwa = kwa, **kwargs)
+
+    @staticmethod
+    def defaulttabsize(ctrl) -> Dict[str, int]:
+        "the default tab size"
+        return _defaulttabsize(ctrl)
 
     def isactive(self, *_1, **_2) -> bool:
         "whether the state is set to active"

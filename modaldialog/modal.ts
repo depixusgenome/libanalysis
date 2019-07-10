@@ -5,6 +5,7 @@ import {Model}              from "model"
 declare function jQuery(...args: any[]): any
 declare function __extends(...args:any[]): void
 declare var _: any
+declare var Bokeh: any
 
 /* Modal was copied from backbone-modal */
 function boundMethodCheck(instance:any, Constructor: any) {
@@ -610,6 +611,7 @@ export class DpxModalView extends DOMView {
 export class DpxModal extends Model {
     properties: DpxModal.Props
     toJSON(){
+        const bkclass  = Bokeh.version != '1.0.4' ? ' bk ' : ''
         let title:string = ""
         if (this.title == "")
             title = "<p style='height:5px;'></p>"
@@ -620,21 +622,21 @@ export class DpxModal extends Model {
                         "</h3>"                                                 +
                     "</div>"
 
-        let body  = "<div class='bbm-modal__section'>"                              +
-                    '<form id="dpxbbmform" class="bk-root">'+this.body+"</form>"    +
+        let body  = "<div class='bbm-modal__section'>"                             +
+            `<form id="dpxbbmform" class="${bkclass} bk-root">${this.body}</form>` +
                 "</div>"
 
         let btns = ""
         if(this.buttons == "")
-            btns  = "<div class='bbm-modal__bottombar bk-root'>"                    +
-                        "<button type='button' class='bk-bs-btn bk-bs-btn-default " +
+            btns  = `<div class='bbm-modal__bottombar ${bkclass} bk-root'>`         +
+                `<button type='button' class='${bkclass} bk-btn bk-btn-default ` +
                         "dpx-modal-cancel'>Cancel</button>"                         +
-                        "<button type='button' class='bk-bs-btn bk-bs-btn-default " +
+                `<button type='button' class='${bkclass} bk-btn bk-btn-default ` +
                         "dpx-modal-done'>Apply</button>"                            +
                     "</div>"
         else
-            btns  = "<div class='bbm-modal__bottombar bk-root'>"                    +
-                        "<button type='button' class='bk-bs-btn bk-bs-btn-default " +
+            btns  = `<div class='bbm-modal__bottombar ${bkclass} bk-root'>`         +
+                        `<button type='button' class='${bkclass} bk-btn bk-btn-default `+
                         "dpx-modal-done'>"+this.buttons+"</button>"                     +
                     "</div>"
         return { template: "<fragment>"+title+" "+body+" "+btns+"</fragment>"}

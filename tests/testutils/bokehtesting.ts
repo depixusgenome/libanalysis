@@ -1,8 +1,12 @@
 import *        as p    from "core/properties"
 import {Model}          from "model"
 import {DOMView}        from "core/dom_view"
+import {MenuItemClick, ButtonClick}  from "core/bokeh_events"
+import {Dropdown}       from "models/widgets/dropdown"
+import {Button}          from "models/widgets/button"
 
-declare function jQuery(...args: any[]): any
+declare var jQuery: any
+declare var Bokeh: any
 
 export namespace DpxTestLoaded {
     export type Attrs = p.AttrsOf<Props>
@@ -46,23 +50,36 @@ export class DpxTestLoaded extends Model {
         jQuery(() => this.done = 1)
 
         let oldlog   = console.log
-        console.log  = () => this._tostr(oldlog, 'debug', arguments)
+        console.log  = (...args) => this._tostr(oldlog, 'debug', args)
 
         let oldinfo  = console.info
-        console.info = () => this._tostr(oldinfo, 'info', arguments)
+        console.info = (...args) => this._tostr(oldinfo, 'info', args)
 
         let oldwarn  = console.warn
-        console.warn = () => this._tostr(oldwarn, 'warn', arguments)
+        console.warn = (...args) => this._tostr(oldwarn, 'warn', args)
     }
 
-    _tostr(old, name:string, args): void {
+    _tostr(old:any, name:string, args:any[]): void {
         old.apply(console, args)
 
         let str = ""
         for(let i in args)
             str = str + " " + i
-        this[name] = ""
-        this[name] = str
+        if(name == 'debug')
+        {
+            this.debug = ""
+            this.debug = str
+        }
+        if(name == 'info')
+        {
+            this.info = ""
+            this.info = str
+        }
+        if(name == 'warn')
+        {
+            this.warn = ""
+            this.warn = str
+        }
     }
 
     _create_evt(name:string) {
@@ -94,19 +111,31 @@ export class DpxTestLoaded extends Model {
     }
 
     _change() {
-        console.debug("changed attribute: ", this.attrs, this.value)
         let root = this._model()
+        console.debug("changed attribute: ", root, this.attrs, this.attr, this.value)
         if(root != null)
         {
             let mdl = root
             for(let i in this.attrs)
                 mdl = mdl[i]
 
-            mdl[this.attr] = this.value
-            if(this.attrs.length == 0)
-                root.properties[this.attr].change.emit()
-            else
-                root.properties[this.attrs[0]].change.emit()
+            if(this.attr == "clicks" && mdl instanceof Button)
+            {
+                mdl.clicks = mdl.clicks + 1
+                mdl.trigger_event(new ButtonClick())
+            }
+            else if(this.attr == "value" && mdl instanceof Dropdown)
+            {
+                mdl.trigger_event(new MenuItemClick(this.value))
+                mdl.value = this.value
+            } else
+            {
+                mdl[this.attr] = this.value
+                if(this.attrs.length == 0)
+                    root.properties[this.attr].change.emit()
+                else
+                    root.properties[this.attrs[0]].change.emit()
+            }
         } else
             console.log("changed key but there's no model")
     }

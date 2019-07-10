@@ -157,11 +157,15 @@ class CheckOption(Option):
             attr = self._addtoattr(
                 match.group("attr"),
                 "class",
-                "bk-bs-checkbox bk-widget-form-input"
+                "bk bk-input"
             )
             assert len(key), "keys must have a name"
             val = 'checked' if bool(self.getvalue(model, key, False)) else ''
-            return '<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
+            return (
+                '<div class ="bk bk-input-group">'
+                +'<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
+                +"</div>"
+            )
 
         return self._PATT.sub(_replace, body)
 
@@ -191,8 +195,8 @@ class TextOption(Option):
 
             attr  = info.get('attr', '') or ''
             if info.get('width', None):
-                attr = self._addtoattr(attr, "style", f'width: {info["width"]}px;')
-            attr = self._addtoattr(attr, "class", 'bk-widget-form-input')
+                attr = self._addtoattr(attr, "style", f'min-width: {info["width"]}px;')
+            attr = self._addtoattr(attr, "class", 'bk bk-input')
 
             inpt = '<input type="{}" name="{}" {} {}>'
             return inpt.format(tpe, key, opt, attr)
@@ -259,11 +263,11 @@ class CSVOption(Option):
                 if "title" not in attr:
                     opt += f' title="comma separated {self._title}" '
 
-            attr = self._addtoattr(attr, "class", 'bk-widget-form-input')
+            attr = self._addtoattr(attr, "class", 'bk bk-input')
             if match.group('width'):
-                attr = self._addtoattr(attr, "style", f'width: {match.group("width")}px;')
+                attr = self._addtoattr(attr, "style", f'min-width: {match.group("width")}px;')
 
-            inpt = '<input type="text" name="{}" {} {}>'
+            inpt = '<div class="bk bk-input-group"><input type="text" name="{}" {} {}></div>'
             return inpt.format(key, opt, attr)
 
         return self._patt.sub(_replace, body)

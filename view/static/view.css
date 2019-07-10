@@ -385,7 +385,7 @@ width: 100%; }
 .dpx-modal-div td { border-bottom: lavender dotted 1px}
 
 .dpx-inner { display: inline-block; }
-.dpx-span  { display: -webkit-inline-box; }
+.dpx-span  { display: -webkit-inline-box!important; }
 .dpx-widget label { margin-left: 9px; margin-top: 3px; margin-right: 3px; }
 .dpx-widget p { margin-left: 9px; margin-top: 3px; margin-right: 3px; }
 .dpx-widget input { height: 28px; }

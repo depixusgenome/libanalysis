@@ -17,7 +17,7 @@ from   control.decentralized   import DecentralizedController
 from   control.action          import ActionDescriptor
 from   undo.control            import UndoController
 from   view.keypress           import DpxKeyEvent
-from   model.maintheme         import MainTheme
+from   model.maintheme         import MainTheme, AppTheme
 from   utils.logconfig         import getLogger
 from   .configuration          import ConfigurationIO
 from   .scripting              import orders
@@ -119,7 +119,6 @@ class BaseSuperController:
         self.display = DisplayController()
         self._config_counts = [False]
 
-
     emitpolicy = EmitPolicy
 
     def __undos__(self, wrapper):
@@ -149,15 +148,12 @@ class BaseSuperController:
     @classmethod
     def launchkwargs(cls, **kwa) -> Dict[str, Any]:
         "updates kwargs used for launching the application"
-        cnf   = ConfigurationIO(cls)
-        maps  = {'theme': {'appsize': cnf.appsize, 'appname': cnf.appname},
-                 'config': {'catcherror': DisplayController.CATCHERROR}}
-        maps = cnf.readuserconfig(maps, update = True)
-
+        maps = cls.__apptheme()
         DisplayController.CATCHERROR = maps['config']['catcherror']
         kwa.setdefault("title",  maps['theme']["appname"])
         kwa.setdefault("size",   maps['theme']['appsize'])
         return kwa
+
     def _open(self, viewcls, doc, kwa):
         @contextmanager
         def _test(msg):
@@ -172,6 +168,9 @@ class BaseSuperController:
 
         keys = None
         try:
+            with _test('Could not read main theme'):
+                self.theme.add(AppTheme(**self.__apptheme()['theme']))
+
             with _test("Could not create GUI instance"):
                 keys         = DpxKeyEvent(self)
                 self.topview = viewcls(self, **kwa)
@@ -278,10 +277,22 @@ class BaseSuperController:
 
     def _setmaps(self, maps):
         for i, j in maps.items():
+            if i == 'theme':
+                self.theme.update(i, **j)
             if i.startswith('theme.') and i[6:] in self.theme and j:
                 self.theme.update(i[6:], **j)
             elif i.startswith('config.') and i[7:] in self.theme and j:
                 self.theme.update(i[7:], **j)
+
+    @classmethod
+    def __apptheme(cls) -> Dict[str, Any]:
+        "updates kwargs used for launching the application"
+        cnf   = ConfigurationIO(cls)
+        maps  = {'theme': {'appsize': cnf.appsize, 'appname': cnf.appname},
+                 'config': {'catcherror': DisplayController.CATCHERROR}}
+        maps = cnf.readuserconfig(maps, update = True)
+        return maps
+
 
     def _observeargs(self):
         raise NotImplementedError()

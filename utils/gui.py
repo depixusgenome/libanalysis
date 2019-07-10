@@ -29,10 +29,34 @@ def coffee(apath: Union[str,Path], name:Optional[str] = None, **kwa) -> str:
         src = src.replace("$$"+title, val)
     return src.replace('$$', '')
 
+def monkeypatchbokehcompiler():
+    "monkeypatch bokeh compiler"
+    import bokeh
+    if bokeh.__version__ == '1.0.4':
+        return
+
+    import bokeh.util.compiler as _compiler
+    def calc_cache_key(custom_models):
+        ''' Generate a key to cache a custom extension implementation with.
+
+        There is no metadata other than the Model classes, so this is the only
+        base to generate a cache key.
+
+        We build the model keys from the list of ``model.full_name``. This is
+        not ideal but possibly a better solution can be found found later.
+
+        '''
+        model_names = sorted({model.full_name for model in custom_models.values()})
+        encoded_names = ",".join(sorted(model_names)).encode('utf-8')
+        return _compiler.hashlib.sha256(encoded_names).hexdigest()
+    _compiler.calc_cache_key = calc_cache_key
+
 def storedjavascript(inpt, name):
     "get stored javascript"
     import bokeh
     from   bokeh.util import compiler
+    monkeypatchbokehcompiler()
+
     cache   = getattr(compiler, "_bundle_cache")
     force   = False
     selfkey = compiler.calc_cache_key(*(

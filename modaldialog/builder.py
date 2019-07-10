@@ -120,7 +120,7 @@ class BodyParser:
         head = "cur" if btn == ind else ""
         return (
             "<button type='button'"
-            +f" class='bk-bs-btn bk-bs-btn-default bbm-dpx-{head}btn'"
+            +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}btn'"
             +f" id='bbm-dpx-btn-{btn}'"
             +f' onclick="{fcn}({btn})">'
             +f'{title}</button>'
