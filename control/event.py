@@ -9,6 +9,7 @@ from enum               import Enum, unique
 from typing             import (Dict, Union, Sequence, Callable, Tuple, Any, Set,
                                 Optional, List, cast)
 
+import pickle
 from utils              import ismethod, isfunction, toenum
 from utils.logconfig    import getLogger
 LOGS = getLogger(__name__)
@@ -377,6 +378,15 @@ class Event:
 
         return fcn
 
+def _compare(cur, val):
+    if type(cur) is not type(val):
+        return False
+    try:
+        return cur == val
+    except Exception: #  pylint: disable=broad-except
+        return pickle.dumps(cur) == pickle.dumps(val)
+    return False
+
 class Controller(Event):
     "Main controller class"
     @classmethod
@@ -389,7 +399,8 @@ class Controller(Event):
         "updates a model element"
         old = dict()
         for name, val in kwargs.items():
-            if getattr(model, name) == val:
+            cur = getattr(model, name)
+            if _compare(cur, val):
                 continue
 
             old[name] = getattr(model, name)
