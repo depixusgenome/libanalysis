@@ -872,11 +872,12 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
                         self._reset(cache)
                         self._updater.reset(self._theme, self._model.themename, cache)
             except Exception as exc: # pylint: disable=broad-except
-                args = getattr(exc, 'args', tuple())
-                if len(args) == 2 and args[1] == "warning":
-                    ctrl.display.update("message", message = exc)
-                else:
-                    raise
+                if self._statehash() == identity:
+                    args = getattr(exc, 'args', tuple())
+                    if len(args) == 2 and args[1] == "warning":
+                        ctrl.display.update("message", message = exc)
+                    else:
+                        raise
             finally:
                 self._LOCK.release()
                 self.state = old
