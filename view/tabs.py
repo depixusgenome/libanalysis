@@ -3,7 +3,7 @@
 "all view aspects here"
 from collections         import OrderedDict
 from pathlib             import Path
-from typing              import Dict, ClassVar, TypeVar, Tuple, Generic, Type
+from typing              import Dict, ClassVar, TypeVar, Tuple, Generic, Type, Optional
 
 from bokeh               import layouts
 from bokeh.models        import Panel, Spacer, Tabs
@@ -25,26 +25,26 @@ class TabsTheme: # pylint: disable=too-many-instance-attributes
         self.width:   int            = 1100
         self.height:  int            = 30
         self.panelheight: int        = 800
+        self.docurl:  str            = "doc"
         self.titles:  Dict[str, str] = OrderedDict()
         for i, j in panels.items():
             self.titles[j] = getattr(i, 'PANEL_NAME', j.capitalize())
         assert self.initial in self.titles
         self.version: int = _timestamp() if version == 0 else version
 
-    @classmethod
-    def defaultstartup(cls, name):
+    def defaultstartup(self, name: str) -> Optional[str]:
         "extracts default startup message from a changelog"
         path = Path(".").absolute()
         for _ in range(4):
-            if (path/cls.CHANGELOG).exists():
+            if (path/self.CHANGELOG).exists():
                 break
             path = path.parent
         else:
             return None
 
-        path /= cls.CHANGELOG
+        path /= self.CHANGELOG
         with open(path, "r", encoding="utf-8") as stream:
-            return changelog(stream, name)
+            return changelog(stream, name, self.docurl)
         return None
 
 TThemeType = TypeVar("TThemeType", bound = TabsTheme)
@@ -185,22 +185,26 @@ class TabsView(Generic[TThemeType], BokehView):
         for panel in self._panels:
             panel.observe(ctrl)
 
-        mdl  = self.__theme
-        cur  = ctrl.theme.get(mdl, 'version')
-        vers = ctrl.theme.get(mdl, 'version', defaultmodel = True)
-        if None in (cur, vers) or cur > vers:
-            return
-        msg = ctrl.theme.get(mdl, 'startup')
-        if msg == "":
-            msg = mdl.defaultstartup(getattr(ctrl, 'APPNAME', None))
-            if msg is None:
-                return
-
         @ctrl.display.observe
-        def _onscriptsdone(**_):
-            ctrl.theme.update(mdl, version = vers+1)
-            ctrl.writeuserconfig()
-            dialog(self._doc, body = msg, buttons = "ok")
+        def _onchangelog(**_):
+            doc = self.__theme.defaultstartup(getattr(ctrl, 'APPNAME', None))
+            if doc:
+                dialog(self._doc, body = doc, buttons = "ok")
+
+        cur  = ctrl.theme.get(self.__theme, 'version')
+        vers = ctrl.theme.get(self.__theme, 'version', defaultmodel = True)
+        if None not in (cur, vers) and cur <= vers:
+            @ctrl.display.observe
+            def _onscriptsdone(**_):
+                mdl = self.__theme
+                ctrl.theme.update(mdl, version = vers+1)
+                ctrl.writeuserconfig()
+
+                msg = ctrl.theme.get(mdl, 'startup')
+                if msg == "":
+                    msg = mdl.defaultstartup(getattr(ctrl, 'APPNAME', None))
+                if msg:
+                    dialog(self._doc, body = msg, buttons = "ok")
 
 def initsubclass(name, keys, *_1, **_2):
     "init TabsView subclass"

@@ -102,7 +102,7 @@ class BodyParser:
         return title, cls.jointabs(tabs)
 
     @classmethod
-    def jointabs(cls, tabs):
+    def jointabs(cls, tabs) -> str:
         "return html"
         return (
             (
@@ -196,9 +196,10 @@ def tohtml(body, model, default) -> Dict[str, Optional[str]]:
     "return the title and the body for a modaldialog"
     return BodyParser.tohtml(body, model, default)
 
-def changelog(stream:TextIO, appname:str):
+def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Optional[str]:
     "extracts default startup message from a changelog"
     head = '<h2 id="'+appname.lower().split('_')[0].replace('app', '')
+
     line = ""
     for line in stream:
         if line.startswith(head):
@@ -215,4 +216,25 @@ def changelog(stream:TextIO, appname:str):
             break
         else:
             tabs[-1][-1] += line
-    return BodyParser.jointabs(tabs)
+
+    out = BodyParser.jointabs(tabs)
+    if docpath is not None:
+        return f"""
+            <style>
+                a:link, a:visited {{
+                  background-color: green;
+                  color: white;
+                  padding: 15px 25px;
+                  text-align: center;
+                  text-decoration: none;
+                  display: inline-block;
+                }}
+
+                a:hover, a:active {{ background-color: darkgreen;}}
+            </style> 
+            <a href="{docpath}/{appname}/{appname}.html" target="_blank" style="float:right;">
+                Read the doc!!!
+            </a>
+            {out}
+            """
+    return out
