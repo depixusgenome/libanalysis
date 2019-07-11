@@ -106,7 +106,7 @@ class BodyParser:
         "return html"
         return (
             (
-                "<div class='dpx-span'>"
+                "<div>"
                 +"".join(cls.__htmltitle(i, j[0],  0) for i, j in enumerate(tabs))
                 +"</div>"
             )
