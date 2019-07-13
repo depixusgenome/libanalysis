@@ -277,7 +277,15 @@ class PlotAttrsView(PlotAttrs):
         args.pop('glyph')
         args.update(kwa)
         getattr(self, '_'+self.glyph, self._default)(args)
-        return {i: themed(theme, j) for i, j in args.items()}, themed(theme, self.glyph)
+        args = {i: themed(theme, j) for i, j in args.items()}
+        for i, j in list(args.items()):
+            if 'color' not in i:
+                continue
+            try:
+                args[i] = tohex(j)
+            except AttributeError:
+                pass
+        return args, themed(theme, self.glyph)
 
     def reset(self, theme = 'basic', **kwa) -> GlyphRenderer:
         "adds itself to plot: defines color, size and glyph to use"
@@ -290,15 +298,11 @@ class PlotAttrsView(PlotAttrs):
 
     def setcolor(self, rend, cache = None, theme = None, **kwa):
         "sets the color"
-        args   = self.__args(theme, kwa)[0]
-        colors = {}
-        for i, j in args.items():
-            if 'color' not in i:
-                continue
-            try:
-                colors[i] = tohex(j)
-            except AttributeError:
-                pass
+        colors = {
+            i: j
+            for i, j in self.__args(theme, kwa)[0].items()
+            if 'color' in i and isinstance(j, str) and j[0] == '#'
+        }
 
         if cache is None:
             rend.glyph.update(**colors)
