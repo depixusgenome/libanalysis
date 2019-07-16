@@ -2,25 +2,28 @@
 #include <vector>
 #include <valarray>
 #include <type_traits>
-#include <boost/preprocessor/stringize.hpp>
-#include <boost/preprocessor/seq.hpp>
-#include <boost/preprocessor/seq/cat.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
+#ifdef HAVE_BOOST
+#   include <boost/preprocessor/stringize.hpp>
+#   include <boost/preprocessor/seq.hpp>
+#   include <boost/preprocessor/seq/cat.hpp>
+#   include <boost/preprocessor/seq/for_each.hpp>
+#endif
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#ifdef HAVE_BOOST
+#   define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
+#   define DPX_PY2C(CLS, ATTRS) \
+        _defaults<CLS>(mod, #CLS, doc BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
+#   define DPX_ADD_API(cls, CLS, ATTRS) \
+        dpx::pyinterface::addapi<CLS>(cls BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
+#   define DPX_WRAP(CLS, ATTRS) \
+        py::class_<CLS> cls(mod, #CLS, doc);\
+        dpx::pyinterface::addapi<CLS>(cls BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
 
-#define DPX_TO_PP(_, CLS, ATTR) , dpx::pyinterface::pp(BOOST_PP_STRINGIZE(ATTR), &CLS::ATTR)
-#define DPX_PY2C(CLS, ATTRS) \
-    _defaults<CLS>(mod, #CLS, doc BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
-#define DPX_ADD_API(cls, CLS, ATTRS) \
-    dpx::pyinterface::addapi<CLS>(cls BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
-#define DPX_WRAP(CLS, ATTRS) \
-    py::class_<CLS> cls(mod, #CLS, doc);\
-    dpx::pyinterface::addapi<CLS>(cls BOOST_PP_SEQ_FOR_EACH(DPX_TO_PP, CLS, ATTRS));
-
-#define DPX_GIL_SCOPED(CODE) [&](){ py::gil_scoped_release _; return CODE; }();
+#   define DPX_GIL_SCOPED(CODE) [&](){ py::gil_scoped_release _; return CODE; }();
+#endif
 
 namespace dpx { namespace pyinterface {
     namespace py = pybind11;
