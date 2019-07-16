@@ -43,7 +43,7 @@ class DpxModal(Model):
             buttons                             = "",
             always                              = False):
         "runs the modal dialog"
-        self.__handler: Optional[Callable] = (
+        self.__handler = (
             None if isinstance(callback, Callback) or model is None else
             (lambda x: fromhtml(x, body, model)) if context is None else
             (lambda x: fromhtml(x, body, model, lambda : context(title))) # type: ignore
