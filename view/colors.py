@@ -23,9 +23,11 @@ def tohex(clr:Set[str]) -> Set[str]:
 def tohex(clr:str) -> Union[str, List[str]]:
     "return either the palette or the hex color associated to a name"
 
-def tohex(clr:Union[Dict[Any,str], List[str], Tuple[str], Set[str], str]):
+def tohex(clr:Union[Dict[Any,str], List[str], Tuple[str], Set[str], str, None]):
     "return the hex value"
     return (
+        None                                if clr is None             else
+
         type(cast(dict, clr))((i, tohex(j)) for i, j in getattr(clr, 'items')())
         if callable(getattr(clr, 'items', None)) else
 
@@ -35,6 +37,6 @@ def tohex(clr:Union[Dict[Any,str], List[str], Tuple[str], Set[str], str]):
         if not isinstance(clr, str)   else
 
         clr                             if len(clr) and clr[0] == '#' else
-        getattr(_palette, clr)          if hasattr(_palette, clr)     else
-        getattr(_bkclr, clr).to_hex()
+        getattr(_bkclr, clr).to_hex()   if hasattr(_bkclr, clr)       else
+        getattr(_palette, clr)
     )

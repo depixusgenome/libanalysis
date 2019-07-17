@@ -16,6 +16,9 @@ class _dico:
 
 def test_colors():
     "test color retrieval"
+    assert tohex(None) is None
+    assert tohex('gray') == _bkclr.gray.to_hex()
+    assert tohex('grey') == _bkclr.gray.to_hex()
     assert tohex('red') == _bkclr.red.to_hex()
     assert tohex('RdYlGn9') == getattr(_palette, 'RdYlGn9')
     assert tohex(['brown']) == [_bkclr.brown.to_hex()]
