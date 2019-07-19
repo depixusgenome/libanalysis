@@ -144,6 +144,25 @@ def test_splits():
     assert splitoligos('-AtG') == ['-atg']
     assert splitoligos(':+AtG;') == ['+atg']
 
+    assert splitoligos([':+AtG;', 'att,cc']) == ['+atg', 'att', 'cc']
+    assert splitoligos({':+AtG;', 'att,cc'}) == ['+atg', 'att', 'cc']
+    assert splitoligos((':+AtG;', 'att,cc')) == ['+atg', 'att', 'cc']
+    assert splitoligos(iter((':+AtG;', 'att,cc'))) == ['+atg', 'att', 'cc']
+    assert splitoligos((i for i in (':+AtG;', 'att,cc'))) == ['+atg', 'att', 'cc']
+    def _iter():
+        yield ':+AtG;'
+        yield 'att,cc'
+    assert splitoligos(_iter()) == ['+atg', 'att', 'cc']
+
+    assert splitoligos("3mer", path = "/a/b/ccc_3nM/aaa_bbb_ccc_3nM") == ["ccc"]
+    assert splitoligos("3mer", path = "/a/b/aca_bbb_ccc_3nM_aaa2pM") == ["aaa", "ccc"]
+    assert splitoligos("4mer", path = "/a/b/aca_bbb_ccc_3nM_aaa2pM") == []
+    assert splitoligos("3mer", path = ["/a/b/aca_bbb_ccc_3nM_aaa2pM"]) == ["aaa", "ccc"]
+    assert splitoligos(
+        "4mer",
+        path = "test035_5HPs_mix_CTGT--4xAc_5nM_25C_10sec.trk"
+    ) == ["ctgt"]
+
 _MODES = [
     ('o', 'CTAG',  'GATC',   (2.955491253e-05, 33835.3225, 0.72671001, -3.0670222, -57.58380)),
     ('o', 'GATC',  'CTAG',   (2.031866819e-05, 49215.8241, 0.58278606, -2.4716049, -62.03634)),
@@ -278,5 +297,4 @@ def test_repr_hpin():
 
 
 if __name__ == '__main__':
-    for i in _MODES3:
-        test_mt_complex(i[0])
+    test_splits()

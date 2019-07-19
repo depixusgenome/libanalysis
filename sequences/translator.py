@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 "All sequences-related stuff"
 from    pathlib     import Path
-from    typing      import Sequence, Union, Iterable, Tuple, Dict, cast
+from    typing      import (
+    Sequence, Union, Iterable, Tuple, Dict, ClassVar, Set, Iterator, List,
+    Callable, Pattern, Match, Optional, Generator, cast
+)
 import  re
 import  numpy       as np
 from    utils       import initdefaults
@@ -28,23 +31,21 @@ def _create_comple()->np.ndarray:
 
 class Translator:
     "Translates a sequence to peaks"
-    __START  = '0', 'start', 'first', 'zero', 'doublestrand', 'closed'
-    __END    = '_', 'singlestrand', '$', '-1', 'last', 'end', 'open'
-    __SYMBOL = '!'
-    __STATE  = '-+'
-    __METHS  = ((re.compile('.'+__SYMBOL), lambda x: '('+x.string[x.start()]+')'),
-                (re.compile(__SYMBOL+'.'), lambda x: '('+x.string[x.end()-1]+')'))
-    __TRANS  = {'k': '[gt]', 'm': '[ac]', 'r': '[ag]', 'y': '[ct]', 's': '[cg]',
-                'w': '[at]', 'b': '[^a]', 'v': '[^t]', 'h': '[^g]', 'd': '[^c]',
-                'n': '.',    'x': '.', 'u': 't'}
+    __SYMBOL: ClassVar[str] = '!'
+    __STATE:  ClassVar[str] = '-+'
+    __METHS:  ClassVar[Tuple[Tuple[Pattern, Callable[[Match],str]],...]]  = (
+        (re.compile('.'+__SYMBOL), lambda x: '('+x.string[x.start()]+')'),
+        (re.compile(__SYMBOL+'.'), lambda x: '('+x.string[x.end()-1]+')')
+    )
+    __TRANS: ClassVar[Dict[str, str]] = {
+        'k': '[gt]', 'm': '[ac]', 'r': '[ag]', 'y': '[ct]', 's': '[cg]',
+        'w': '[at]', 'b': '[^a]', 'v': '[^t]', 'h': '[^g]', 'd': '[^c]',
+        'n': '.',    'x': '.', 'u': 't'
+    }
     __TRANS.update({i.upper(): j for i, j in __TRANS.items()})
 
-    __TRAFIND = re.compile('['+''.join(__TRANS)+']')
-    __ALPHABET= 'atgc'+''.join(__TRANS)+__SYMBOL+__END[0]+__START[0]+r'\+\-'
-    __SPLIT   = re.compile((r'(?:[^%(alph)s]*)([%(alph)s]+)(?:[^%(alph)s]+|$)*'
-                            % dict(alph =__ALPHABET)), re.IGNORECASE)
-
-    __COMPLE = _create_comple()
+    __TRAFIND: ClassVar[Pattern]   = re.compile('['+''.join(__TRANS)+']')
+    __COMPLE:  ClassVar[np.ndarray] = _create_comple()
 
     @classmethod
     def __trarep(cls, item):
@@ -79,12 +80,12 @@ class Translator:
                     continue
             oli = oli.replace(cls.__STATE[0], '').replace(cls.__STATE[1], '')
 
-            if oli == cls.__START[1]:
+            if oli == OligoPathParser.START[1]:
                 if state:
                     yield (0, state)
                 continue
 
-            if oli == cls.__END[1]:
+            if oli == OligoPathParser.END[1]:
                 if state:
                     yield (len(seq), state)
                 continue
@@ -174,20 +175,127 @@ class Translator:
     @classmethod
     def split(cls, oligs:str)->Sequence[str]:
         "splits a string of oligos into a list"
-        for i in cls.__START[1:]:
-            oligs = oligs.replace(i, cls.__START[0]).replace(i.upper(), cls.__START[0])
-        for i in cls.__END[1:]:
-            oligs = oligs.replace(i, cls.__END[0]).replace(i.upper(), cls.__END[0])
-        out   = sorted(i.lower() for i in cls.__SPLIT.findall(oligs))
-        return [cls.__END[1]    if i == cls.__END[0]   else
-                cls.__START[1]  if i == cls.__START[0] else
-                i for i in out]
+        return [
+            OligoPathParser.END[1]    if i == OligoPathParser.END[0]   else
+            OligoPathParser.START[1]  if i == OligoPathParser.START[0] else
+            i
+            for i in sorted(set(OligoPathParser.split(oligs)))
+        ]
+
+class OligoPathParser:
+    "Translates a sequence to peaks"
+    START:  ClassVar[Tuple[str,...]] = (
+        '0', 'start', 'first', 'zero', 'doublestrand', 'closed'
+    )
+    END:    ClassVar[Tuple[str,...]] = (
+        '_', 'singlestrand', '$', '-1', 'last', 'end', 'open'
+    )
+    _ABC:   ClassVar[str]            = r'\w_\$!\+\-'
+    _SPLIT: ClassVar[Pattern]       = re.compile(
+        rf'(?:[^{_ABC}]*)([{_ABC}]+)(?:[^{_ABC}]+|$)*', re.IGNORECASE
+    )
+
+    _MER:  ClassVar[str]      = (
+        r'(?:_|^)(?P<ol>[atgc]+)(?:\-*\dxac)*_*'
+        r'(?P<id>\d+(?:[.dp]\d+)*)(?P<unit>[np]M)(?:_|$)'
+    )
+    _KMER: ClassVar[Pattern] = re.compile(_MER, re.IGNORECASE)
+    _3MER: ClassVar[Pattern] = re.compile(
+        _MER.replace('[atgc]+', '[atgc]'*3), re.IGNORECASE
+    )
+    _4MER: ClassVar[Pattern] = re.compile(
+        _MER.replace('[atgc]+', '[atgc]'*4), re.IGNORECASE
+    )
+    _5MER: ClassVar[Pattern] = re.compile(
+        _MER.replace('[atgc]+', '[atgc]'*5), re.IGNORECASE
+    )
+    _KMERS: ClassVar[Pattern] = _KMER
+    _3MERS: ClassVar[Pattern] = _3MER
+    _4MERS: ClassVar[Pattern] = _4MER
+    _5MERS: ClassVar[Pattern] = _5MER
+
+    @classmethod
+    def split(cls, oligs:str) -> Iterator[str]:
+        "splits a string of oligos into a list"
+        for i in cls.START[1:]:
+            oligs = oligs.replace(i, cls.START[0]).replace(i.upper(), cls.START[0])
+        for i in cls.END[1:]:
+            oligs = oligs.replace(i, cls.END[0]).replace(i.upper(), cls.END[0])
+        yield from cls._SPLIT.findall(oligs)
+
+    _ITEMS = (tuple, list, set, frozenset, Iterator, Generator)
+    @classmethod
+    def _splat(cls, items) -> Iterator:
+        rem = list(items) if isinstance(items, cls._ITEMS) else [items]
+        while rem:
+            cur = rem.pop()
+            if not cur:
+                continue
+            if isinstance(cur, cls._ITEMS):
+                rem.extend(cur)
+            else:
+                yield cur
+
+    @classmethod
+    def parse(
+            cls,
+            oligos: Union[Iterable[Union[str, Pattern, None]], str, Pattern, None],
+            path:   Union[Iterable[Union[str, Path]], str, Path] = ()
+    ):
+        "yields oligos found in the arguments or parsed from provided paths"
+        if not oligos:
+            return
+
+        tosplit: str      = ''
+        stems:   Set[str] = { Path(str(i)).stem for i in cls._splat(path) }
+        cur:     Union[str, Pattern]
+        for cur in set(cls._splat(oligos)):
+            if isinstance(cur, str):
+                cur = (
+                    re.compile(cur) if '(?P<' in cur else
+                    getattr(cls, '_'+cur.strip().upper(), cur)
+                )
+                if isinstance(cur, str):
+                    tosplit += ','+cur
+                    continue
+
+            for stem in stems:
+                pos:   int             = 0
+                match: Optional[Match] = cur.search(stem)
+                while match is not None:
+                    tosplit += ','+match.group('ol')
+                    pos      = match.span()[1] -1
+                    match    = cur.search(stem, pos)
+        yield from cls.split(tosplit)
+
+    @classmethod
+    def splitoligos(
+            cls,
+            oligos: Union[Iterable[Union[str, Pattern, None]], str, Pattern, None],
+            path:   Union[Iterable[Union[str, Path]], str, Path] = ()
+    ) -> List[str]:
+        """
+        returns a sorted list of *lowercase* oligos found in the arguments or
+        parsed from provided paths
+        """
+        if oligos is None:
+            return []
+        out:   Set[str] = set(i.lower() for i in cls.parse(oligos, path))
+        start: Set[str] = out & set(cls.START)
+        end:   Set[str] = out & set(cls.END)
+
+        ret: List[str] = sorted(out)
+        if start:
+            ret.insert(0, cls.START[0])
+        if end:
+            ret.append(cls.END[0])
+        return ret
 
 del _create_comple
 peaks             = Translator.peaks             # pylint: disable=invalid-name
-splitoligos       = Translator.split             # pylint: disable=invalid-name
 complement        = Translator.complement        # pylint: disable=invalid-name
 reversecomplement = Translator.reversecomplement # pylint: disable=invalid-name
+splitoligos       = OligoPathParser.splitoligos  # pylint: disable=invalid-name
 
 def marksequence(seq:str, oligs: Sequence[str]) -> str:
     u"Returns a sequence with oligos to upper case"
