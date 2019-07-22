@@ -405,15 +405,15 @@ class OligoPathParser:
         """
         if oligos is None:
             return []
-        out:   Set[str] = set(i.lower() for i in cls.parse(oligos, path))
-        start: Set[str] = out & set(cls.START)
-        end:   Set[str] = out & set(cls.END)
+        out:   Set[str]  = set(i.lower() for i in cls.parse(oligos, path))
+        start: Set[str]  = out & set(cls.START)
+        end:   Set[str]  = out & set(cls.END)
 
-        ret: List[str] = sorted(out)
+        ret:   List[str] = sorted(out-start-end)
         if start:
-            ret.insert(0, cls.START[0])
+            ret.insert(0, cls.START[1])
         if end:
-            ret.append(cls.END[0])
+            ret.append(cls.END[1])
         return ret
 
 del _create_comple
