@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 "Utils for testing views"
 from   importlib import import_module
+from   pathlib   import Path
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
 from   threading import Thread
@@ -555,6 +556,27 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             server.stop()
 
         self.cmd(_quit, andstop = False)
+
+    def save(self, path: str, andpress = True, waitfor = 10, **kwa):
+        "save to a path"
+        import view.dialog  # pylint: disable=import-error
+        def _tkopen(*_1, **_2):
+            LOGS.info("saving to path '%s'", path)
+            return path
+
+        self.monkeypatch.setattr(view.dialog, '_tksave', _tkopen)
+        self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_HAS_ZENITY', False)
+        self.monkeypatch.setattr(view.dialog.BaseFileDialog, '_calltk', _tkopen)
+        if andpress:
+            if waitfor and Path(path).exists():
+                Path(path).unlink()
+            self.press('Control-s',rendered = False, **kwa)
+            for _ in range(waitfor if isinstance(waitfor, int) else 10):
+                if Path(path).exists() and (not callable(waitfor) or waitfor()):
+                    break
+                self.wait()
+            else:
+                assert False
 
     def load(self, path: Union[Sequence[str], str], andpress = True, rendered = True, **kwa):
         "loads a path"
