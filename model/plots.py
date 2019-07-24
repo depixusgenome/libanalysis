@@ -3,7 +3,7 @@
 "The basic architecture"
 from copy   import deepcopy
 from enum   import Enum
-from typing import Tuple, Optional, Any
+from typing import Tuple, Optional, Any, Dict
 
 from utils  import initdefaults
 
@@ -48,20 +48,22 @@ class PlotTheme:
     """
     Default plot theme
     """
-    name           = ''
-    ylabel         = 'Z (μm)'
-    yrightlabel    = 'Bases'
-    xtoplabel      = 'Time (s)'
-    xlabel         = 'Frames'
-    figsize        = defaultfigsize()
-    overshoot      = .001
-    boundsovershoot= 1.
-    output_backend = 'canvas'
-    toolbar        = dict(sticky   = False,
-                          location = 'above',
-                          items    = 'xpan,box_zoom,wheel_zoom,save',
-                          hide     = True)
-    tooltips: Any  = None
+    name:            str                  = ''
+    ylabel:          str                  = 'Z (μm)'
+    yrightlabel:     str                  = 'Bases'
+    xtoplabel:       str                  = 'Time (s)'
+    xlabel:          str                  = 'Frames'
+    figsize:         Tuple[int, int, str] = defaultfigsize()
+    overshoot:       float                = .001
+    boundsovershoot: float                = 1.
+    output_backend:  str                  = 'canvas'
+    toolbar:         Dict[str, Any]       = dict(
+        sticky   = False,
+        location = 'above',
+        items    = 'xpan,box_zoom,wheel_zoom,save',
+        hide     = True
+    )
+    tooltips: Any                         = None
     @initdefaults(frozenset(locals()))
     def __init__(self, **kwa):
         pass
@@ -72,13 +74,14 @@ class PlotDisplay:
     """
     Default plot display
     """
-    name               = ""
-    state              = PlotState.active
     __NONE             = (None, None)
+    name:    str       = ""
+    state:   PlotState = PlotState.active
     xinit:   RangeType = __NONE
     yinit:   RangeType = __NONE
     xbounds: RangeType = __NONE
     ybounds: RangeType = __NONE
+
     @initdefaults(frozenset(locals()))
     def __init__(self, **kwa):
         pass
@@ -91,9 +94,9 @@ class PlotModel:
     """
     base plot model
     """
-    theme       = PlotTheme()
-    display     = PlotDisplay()
-    config: Any = None
+    theme:   PlotTheme   = PlotTheme()
+    display: PlotDisplay = PlotDisplay()
+    config:  Any         = None
     def __init__(self):
         self.theme   = deepcopy(self.theme)
         self.display = deepcopy(self.display)
