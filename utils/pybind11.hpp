@@ -33,7 +33,7 @@ namespace dpx { namespace pyinterface {
     template <typename T, typename K>
     inline ndarray<T> toarray2d(K shape, T const * ptr)
     {
-        auto out = pybind11::array_t<T>(shape, {long(shape[1]*sizeof(T)), long(sizeof(T))});
+        auto out = ndarray<T>(shape, {long(shape[1]*sizeof(T)), long(sizeof(T))});
         std::copy(ptr, ptr+shape[1]*shape[0], out.mutable_data());
         return out;
     }
@@ -41,7 +41,7 @@ namespace dpx { namespace pyinterface {
     template <typename T, typename K>
     inline ndarray<T> toarray2d(K && shape, T const * ptr)
     {
-        auto out = pybind11::array_t<T>(std::move(shape),
+        auto out = ndarray<T>(std::move(shape),
                                         {long(shape[1]*sizeof(T)), long(sizeof(T))});
         std::copy(ptr, ptr+shape[1]*shape[0], out.mutable_data());
         return out;
@@ -50,7 +50,7 @@ namespace dpx { namespace pyinterface {
     template <typename T>
     inline ndarray<T> toarray(size_t sz, T const *ptr)
     {
-        auto out = pybind11::array_t<T>(sz);
+        auto out = ndarray<T>(sz);
         std::copy(ptr, ptr+sz, out.mutable_data());
         return out;
     }
@@ -58,7 +58,7 @@ namespace dpx { namespace pyinterface {
     template <typename T, typename = std::enable_if_t<std::is_arithmetic<T>::value>>
     inline ndarray<T> toarray(size_t sz, T val)
     {
-        auto out = pybind11::array_t<T>(sz);
+        auto out = ndarray<T>(sz);
         std::fill(out.mutable_data(), out.mutable_data()+sz, val);
         return out;
     }
@@ -67,7 +67,7 @@ namespace dpx { namespace pyinterface {
     template <typename T>
     inline ndarray<T> toarray(ndarray<T> const & arr)
     {
-        auto out = pybind11::array_t<T>(arr.size());
+        auto out = ndarray<T>(arr.size());
         std::copy(arr.data(), arr.data()+arr.size(), out.mutable_data());
         return out;
     }
