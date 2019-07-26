@@ -42,7 +42,7 @@ class PlotAttrs:
 
 def defaultfigsize(*args) -> Tuple[int, int, str]:
     "return the default fig size"
-    return args+(700, 600, 'fixed')[len(args):] # type: ignore
+    return args+(700, 600, 'stretch_both')[len(args):] # type: ignore
 
 class PlotTheme:
     """

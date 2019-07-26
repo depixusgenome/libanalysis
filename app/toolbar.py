@@ -4,7 +4,6 @@
 from typing           import Generic, TypeVar, cast
 
 from bokeh.layouts    import layout, column
-
 from utils.inspection import getclass, templateattribute
 
 TOOLBAR = TypeVar("TOOLBAR")
@@ -50,20 +49,21 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
         tbar    = self._bar.addtodoc(ctrl, doc)
         others  = self._mainview.addtodoc(ctrl, doc)
         appsize = ctrl.theme.get("theme", "appsize")
-        mode    = ctrl.theme.get('main', 'sizingmode')
         while isinstance(others, (tuple, list)) and len(others) == 1:
             others = others[0]
 
         if isinstance(others, list):
             children = [tbar] + others
         elif isinstance(others, tuple):
-            children = [tbar, layout(others, sizing_mode = mode)]
+            children = [tbar, layout(others, sizing_mode = 'stretch_both')]
         else:
             children = [tbar, others]
 
+        for i in children[1:]:
+            i.sizing_mode = 'stretch_both'
         return column(
             children,
-            sizing_mode = mode,
+            sizing_mode = 'stretch_both',
             css_classes = ["dpx-tb-layout"],
             width       = appsize[0],
             height      = appsize[1],

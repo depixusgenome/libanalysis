@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "basic view module"
-from typing                     import Dict
-from abc                        import ABC
-from asyncio                    import wrap_future
-from concurrent.futures         import ThreadPoolExecutor
+from typing              import Dict, List, Union
+from abc                 import ABC
+from asyncio             import wrap_future
+from concurrent.futures  import ThreadPoolExecutor
 
-from bokeh.document             import Document
+from bokeh.layouts       import GridBox, Row, Column, WidgetBox, Spacer
+from bokeh.plotting      import Figure
+from bokeh.document      import Document
+from tornado.ioloop      import IOLoop
 
-from tornado.ioloop             import IOLoop
-from control.action             import ActionDescriptor
+from control.action      import ActionDescriptor
 
 SINGLE_THREAD = False
 
@@ -87,3 +89,20 @@ class BokehView(View):
     def defaultsizingmode(self, kwa = None, **kwargs) -> dict:
         "the default sizing mode"
         return defaultsizingmode(self, kwa, **kwargs)
+
+def stretchout(root: Union[Row, Column, GridBox]) -> Union[Row, Column, GridBox]:
+    "set the sizing_mode to stretch_both for all but widget boxes"
+    gch: List[Union[Row, Column, GridBox]] = [root]
+    while len(gch):
+        for lay in gch:
+            lay.sizing_mode = 'stretch_both'
+        gch[:] = [
+            j
+            for i in gch for j in getattr(i, 'children', ())
+            if (
+                hasattr(j, 'select')
+                and not isinstance(j, (WidgetBox, Spacer))
+                and any(j.select({'type': Figure}))
+            )
+        ]
+    return root
