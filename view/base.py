@@ -90,19 +90,34 @@ class BokehView(View):
         "the default sizing mode"
         return defaultsizingmode(self, kwa, **kwargs)
 
-def stretchout(root: Union[Row, Column, GridBox]) -> Union[Row, Column, GridBox]:
+def stretchout(root: Union[Row, Column, GridBox], strategy = 1) -> Union[Row, Column, GridBox]:
     "set the sizing_mode to stretch_both for all but widget boxes"
     gch: List[Union[Row, Column, GridBox]] = [root]
-    while len(gch):
-        for lay in gch:
-            lay.sizing_mode = 'stretch_both'
-        gch[:] = [
-            j
-            for i in gch for j in getattr(i, 'children', ())
-            if (
-                hasattr(j, 'select')
-                and not isinstance(j, (WidgetBox, Spacer))
-                and any(j.select({'type': Figure}))
-            )
-        ]
+    if strategy:
+        while len(gch):
+            for lay in gch:
+                lay.sizing_mode = 'stretch_both'
+            gch[:] = [
+                j
+                for i in gch for j in getattr(i, 'children', ())
+                if (
+                    hasattr(j, 'select')
+                    and not isinstance(j, (WidgetBox, Spacer))
+                    and any(j.select({'type': Figure}))
+                )
+            ]
+
+    else:
+        def _hasfig(itm):
+            if isinstance(itm, tuple) and any(isinstance(i, Figure) for i in itm):
+                return True
+            return any(_hasfig(i) for i in getattr(itm, 'children', ()))
+
+        while len(gch):
+            for lay in gch:
+                lay.sizing_mode = 'stretch_both'
+            gch[:] = [
+                j for i in gch for j in getattr(i, 'children', ())
+                if hasattr(j, 'sizing_mode') and _hasfig(j)
+            ]
     return root
