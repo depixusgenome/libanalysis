@@ -177,10 +177,6 @@ def defaultmain(filtr, view, gui, port, defaultapp):
     "Launches an view"
     kwargs = dict(port = port, apponly = False)
     server = _launch(filtr, view, defaultapp, gui, kwargs)
-
-    if gui == 'default':
-        gui = 'browser'
-
     server.run_until_shutdown()
     logging.shutdown()
 
