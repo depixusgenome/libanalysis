@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <vector>
 #include <valarray>
@@ -24,6 +25,9 @@
 
 #   define DPX_GIL_SCOPED(CODE) [&](){ py::gil_scoped_release _; return CODE; }();
 #endif
+
+#define DPX_INTERFACE(NAME) namespace NAME { void pymodule(pybind11::module &); }
+#define DPX_INTERFACE_CALL(NAME)  NAME::pymodule(mod);
 
 namespace dpx { namespace pyinterface {
     namespace py = pybind11;
