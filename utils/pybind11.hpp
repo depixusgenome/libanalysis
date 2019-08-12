@@ -167,6 +167,10 @@ namespace dpx { namespace pyinterface {
     { unpack(get(inst, args, kwa)...); }
 
     template <typename T, typename ...Args> 
+    inline void configure(T & inst, py::dict const & kwa, Args const &... args)
+    { unpack(get(inst, args, kwa)...); }
+
+    template <typename T, typename ...Args> 
     inline py::dict config(T const & inst, Args const &... args)
     { 
         py::dict d;
