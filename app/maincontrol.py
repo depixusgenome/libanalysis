@@ -3,8 +3,9 @@
 "The main controller"
 import sys
 from   contextlib              import contextmanager
+from   functools               import wraps
 from   copy                    import deepcopy
-from   typing                  import Dict, Any
+from   typing                  import Dict, Any, List, Union, Iterable
 
 import bokeh.models as _models
 from   bokeh.themes            import Theme
@@ -22,6 +23,42 @@ from   utils.logconfig         import getLogger
 from   .configuration          import ConfigurationIO
 from   .scripting              import orders
 LOGS = getLogger(__name__)
+
+class WithMessage:
+    "wraps a method to execute it safely"
+    def __init__(self, ctrl, exceptions):
+        self.ctrl: 'BaseSuperController' = ctrl
+        self.warns: List[type] = (
+            [exceptions]     if isinstance(exceptions, type) else
+            list(exceptions) if exceptions is not None       else
+            []
+        )
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, tpe, val, bkt) -> bool:
+        if val is not None:
+            self.__apply(val)
+        return True
+
+    def __call__(self, fcn):
+        @wraps(fcn)
+        def _wrapped(*args, **kwa):
+            try:
+                return fcn(*args, **kwa)
+            except Exception as exc: # pylint: disable=broad-except
+                self.__apply(exc)
+                raise
+        return _wrapped
+
+    def __apply(self, val):
+        LOGS.exception(val)
+        msg = (
+            val,
+            'warning' if self.warns and isinstance(val, self.warns) else 'error'
+        )
+        self.ctrl.display.update('message', message = msg)
 
 class DisplayController(DecentralizedController):
     "All temporary information related to one application run"
@@ -153,6 +190,15 @@ class BaseSuperController:
         kwa.setdefault("title",  maps['theme']["appname"])
         kwa.setdefault("size",   maps['theme']['appsize'])
         return kwa
+
+    def withmessage(
+            self,
+            fcn = None,
+            exceptions: Union[None, type, Iterable[type]] = None
+    ):
+        "wraps a method to execute it safely"
+        ret = WithMessage(self, exceptions)
+        return ret if fcn is None else ret(fcn)
 
     def _open(self, viewcls, doc, kwa):
         @contextmanager
