@@ -3,15 +3,88 @@
 """
 Methods for building modal dialogs
 """
-from   typing    import List, Dict, Tuple, Optional
+from   typing    import List, Dict, Tuple, Optional, Iterable, TypeVar, Union, cast
 from   typing.io import TextIO # pylint: disable=import-error
 import re
 
 from   utils.logconfig import getLogger
 LOGS   = getLogger(__name__)
 
+ModelType = TypeVar('ModelType')
+
+def tohtml(
+        body:    Union[str, Iterable[str]],
+        model:   ModelType,
+        default: Optional[ModelType] = None
+) -> Dict[str, Optional[str]]:
+    """
+    Creates the dialog's body.
+
+    Parameters
+    ----------
+    body:
+        A string or sequence of strings containting the model to create.
+    model:
+        The instance affected byt the dialog
+    default:
+        An instance, normaly of the same type as `model` but with all its
+        attributes at their default value. If an attribute is not at it's
+        default value, the latter is displayed automatically.
+
+    Returns
+    -------
+    A dictionnary with the title and the body to use in the modal dialog
+
+    Example
+    -------
+
+    A complex example with multiple tabs
+    ```python
+    html = tohtml(
+        \"\"\"
+        # Main title
+
+        ## First tab: text
+
+        First entry is a sub-attribute              %(first.attr)s
+        Second entry using an element from a list   %(second[0])s
+        Third has specific input html tags          %(third{placeholder="5" class="dpx-5"})s
+
+        ## Second tab: ints (d) or floats (f)
+
+        First entry accepts ints                    %(ints.first)d
+        Second entry accepts floats                 %(floats.first)f
+        Third entry accepts positive floats         %(floats.sec)F
+        Fourth entry accepts ints or nothing        %(ints.third)od
+
+        ## Second tab: others
+
+        add a checkbox            %(others.first)b
+        add a set of choices      %(choices)|key1:label1|key2:label2|key3:label3|
+        \"\"\",
+        model,
+        default,
+    )
+    ```
+
+    A simpler one used for displaying or hiding a bokeh glyph
+    ```python
+    html = tohtml(
+        \"\"\"
+        ## Configuration
+
+        Display orphaned fringes     %(visible)b
+        \"\"\",
+        glyph
+    )
+    ```
+    """
+    return BodyParser.tohtml(body, model, default)
+
 class BodyParser:
-    "Builds the modal dialog's body"
+    """
+    Builds the modal dialog's body
+    """
     _SPLIT  = re.compile(r"\s\s+")
     _ARG    = re.compile(r"%\(((?:[^[\].]*?|(?:\[\d+\])?|\.?)+)\)\.?(\d+)?([dfs])?")
     _STYLE  = re.compile(r"^(.*?)!([^!]*)!$")
@@ -20,16 +93,21 @@ class BodyParser:
     _ROWT   = '!font-style:italic;font-weight:bold;!'
     _COLT   = '!font-style:italic;font-weight:normal;!'
     @classmethod
-    def tohtml(cls, body, model, default) -> Dict[str, Optional[str]]:
-        "creates the dialog's body"
-        tmp = [
+    def tohtml(
+            cls,
+            body:    Union[str, Iterable[str]],
+            model:   ModelType,
+            default: Optional[ModelType] = None
+    ) -> Dict[str, Optional[str]]:
+        "Creates the dialog's body. see module method for documentation"
+        if default is None:
+            default = model
+        tmp: Iterable[str] = (
             j.strip()
-            for j in (
-                body.strip().split("\n") if isinstance(body, str) else body
-            )
-        ]
-        found = True
-        body  = []
+            for j in (body.strip().splitlines() if isinstance(body, str) else body)
+        )
+        found: bool      = True
+        lines: List[str] = []
         for i in tmp:
             if found and not i:
                 continue
@@ -44,14 +122,39 @@ class BodyParser:
                 found = True
             else:
                 found = False
-            body.append(i)
+            lines.append(i)
 
         try:
-            out: Tuple[Optional[str], str] = cls.__tohtml(body, model, default)
+            out: Tuple[Optional[str], str] = cls.__tohtml(lines, model, default)
         except Exception as exc: # pylint: disable=broad-except
             LOGS.exception(exc)
             out = "Error!", f"<p>{str(exc)}</p>"
         return dict(body = out[1], title = out[0])
+
+    @classmethod
+    def jointabs(cls, tabs: Iterable[Tuple[Optional[str], str]], cur: int = 0) -> str:
+        """
+        Create the HTML string for multiple tabs
+
+        Parameters
+        ----------
+        tabs:
+            The list of tabs. Each item is a pair of strings, title and body.
+        cur:
+            The index of the current tab.
+
+        Returns
+        -------
+        The HTML string for all tabs
+        """
+        return (
+            (
+                "<div>"
+                +"".join(cls.__htmltitle(i, j[0],  cur) for i, j in enumerate(tabs))
+                +"</div>"
+            )
+            +"".join(cls.__htmlbody(i, j[1], cur)  for i, j in enumerate(tabs))
+        )
 
     @staticmethod
     def __title(body) -> Optional[str]:
@@ -67,10 +170,15 @@ class BodyParser:
         return cls.__title(body), html
 
     @classmethod
-    def __tohtml(cls, body, model, default) -> Tuple[Optional[str], str]:
+    def __tohtml(
+            cls,
+            body:    List[str],
+            model:   ModelType,
+            default: ModelType
+    ) -> Tuple[Optional[str], str]:
         "creates the dialog's body"
-        ntitles = sum(1 for i in body if i.startswith('# '))
-        nsubs   = sum(1 for i in body if i.startswith('## '))
+        ntitles: int = sum(1 for i in body if i.startswith('# '))
+        nsubs:   int = sum(1 for i in body if i.startswith('## '))
         if ntitles > 1 and nsubs > 1:
             raise RuntimeError("could not parse dialog")
 
@@ -80,8 +188,8 @@ class BodyParser:
         if ntitles == 0:
             title = None
 
-        titleflag = '^^!^:^' if ntitles >= 2 else "# "
-        tabflag   = '# '     if ntitles >= 2 else "## "
+        titleflag: str = '^^!^:^' if ntitles >= 2 else "# "
+        tabflag:   str = '# '     if ntitles >= 2 else "## "
 
         tabs:  List[Tuple[Optional[str], str]] = []
         lines: List[str]                       = []
@@ -101,20 +209,8 @@ class BodyParser:
         title = cls.__title(body) if ntitles == 1 else None
         return title, cls.jointabs(tabs)
 
-    @classmethod
-    def jointabs(cls, tabs) -> str:
-        "return html"
-        return (
-            (
-                "<div>"
-                +"".join(cls.__htmltitle(i, j[0],  0) for i, j in enumerate(tabs))
-                +"</div>"
-            )
-            +"".join(cls.__htmlbody(i, j[1], 0)  for i, j in enumerate(tabs))
-        )
-
     @staticmethod
-    def __htmltitle(btn:int, title:str, ind: int) -> str:
+    def __htmltitle(btn:int, title:Optional[str], ind: int) -> str:
         "return the html version of the title"
         fcn  = "Bokeh.DpxModal.prototype.clicktab"
         head = "cur" if btn == ind else ""
@@ -123,7 +219,7 @@ class BodyParser:
             +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}btn'"
             +f" id='bbm-dpx-btn-{btn}'"
             +f' onclick="{fcn}({btn})">'
-            +f'{title}</button>'
+            +f'{title if title else "Page "+str(btn)}</button>'
         )
 
     @staticmethod
@@ -192,10 +288,6 @@ class BodyParser:
                 model = model[int(i[1:-1])] if i.startswith('[') else getattr(model, i)
         return model
 
-def tohtml(body, model, default) -> Dict[str, Optional[str]]:
-    "return the title and the body for a modaldialog"
-    return BodyParser.tohtml(body, model, default)
-
 def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Optional[str]:
     "extracts default startup message from a changelog"
     head = '<h2 id="'+appname.lower().split('_')[0].replace('app', '')
@@ -208,7 +300,7 @@ def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Opti
         return None
 
     newtab = lambda x: [x.split('>')[1].split('<')[0].split('_')[1], ""]
-    tabs: List[List[str, str]] = [newtab(line)]  # type: ignore
+    tabs: List[List[str]] = [newtab(line)]  # type: ignore
     for line in stream:
         if line.startswith('<h2'):
             tabs.append(newtab(line))
@@ -217,7 +309,7 @@ def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Opti
         else:
             tabs[-1][-1] += line
 
-    out = BodyParser.jointabs(tabs)
+    out = BodyParser.jointabs(cast(Iterable[Tuple[Optional[str], str]], tabs))
     if docpath is not None:
         return f"""
             <style>

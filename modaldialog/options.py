@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Optionos to be used by the modal dialog
+Options to be used by the modal dialog
 """
 from    typing                  import (
-    Callable, ContextManager, Union, Dict, Any, Tuple, cast
+    Callable, ContextManager, Union, Dict, Any, Tuple, Iterable, cast
 )
 from    functools               import partial
 from    abc                     import ABCMeta, abstractmethod
@@ -359,23 +359,29 @@ def _build_elem(val):
 def _dummy():
     yield
 
-def tohtml(body, model) -> str:
-    "convert to html"
-    if isinstance(body, (tuple, list)):
-        if len(body) == 0:
-            return ""
+def tohtml(body: Union[str, Iterable[str]], model: Any) -> str:
+    """
+    Convert to html, parsing the lines for inputs
+    """
+    strbody: str = ""
+    if isinstance(body, str):
+        strbody = cast(str, body)
+    else:
+        lines = list(body)
+        if len(lines) > 0:
+            strbody = (
+                '<table>'
+                + ''.join(
+                    f"<tr>{''.join(_build_elem(i) for i in j)}</tr>"
+                    for j in body
+                )
+                + '</table>'
+            )
 
-        if hasattr(body[0], 'tohtml'):
-            body = body[0].tohtml(body)
-        else:
-            body = '<table>' + (''.join('<tr>'
-                                        + ''.join(_build_elem(i) for i in j)
-                                        + '</tr>'
-                                        for j in body)) + '</table>'
-
-    for tpe in OPTIONS:
-        body = tpe.replace(model, body)
-    return body
+    if strbody:
+        for tpe in OPTIONS:
+            strbody = tpe.replace(model, strbody)
+    return strbody
 
 def fromhtml(
         itms: Dict[str, Any],
