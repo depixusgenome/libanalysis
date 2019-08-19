@@ -4,7 +4,7 @@
 Options to be used by the modal dialog
 """
 from    typing                  import (
-    Callable, ContextManager, Union, Dict, Any, Tuple, Iterable, cast
+    Callable, ContextManager, Union, Dict, Any, Tuple, Iterable, Optional, cast
 )
 from    functools               import partial
 from    abc                     import ABCMeta, abstractmethod
@@ -40,14 +40,17 @@ class Option(metaclass = ABCMeta):
             current
         )
 
-    def _default_empty(self, elems, model, key):
+    @classmethod
+    def _default_empty(cls, elems, cnv, model, key):
         if elems[key]:
-            self.setvalue(model, key, None)
-        elif self._cnv is str:
-            self.setvalue(model, key, '')
+            cls.setvalue(model, key, None)
+        elif cnv is str:
+            cls.setvalue(model, key, '')
 
-    def _default_apply(self, model, elems, # pylint: disable=too-many-arguments
-                       cnv, storeempty, key, val):
+    @classmethod
+    def _default_apply(# pylint: disable=too-many-arguments
+            cls, model, elems, cnv, storeempty, key, val
+    ):
         if key not in elems:
             return False
 
@@ -57,49 +60,53 @@ class Option(metaclass = ABCMeta):
             except Exception as exc: # pylint: disable=broad-except
                 LOGS.exception(exc)
             else:
-                self.setvalue(model, key, converted)
+                cls.setvalue(model, key, converted)
         elif isinstance(storeempty, Exception):
             raise storeempty
         else:
             storeempty(model, key)
         return True
 
-    def _converter(self, model, elems, cnv, storeempty = None) -> Callable:
+    @classmethod
+    def _converter(cls, model, elems, cnv, storeempty = None) -> Callable:
         "returns a method which sets values in a model"
         if storeempty is None:
-            storeempty = partial(self._default_empty, elems)
-        fcn = partial(self._default_apply, model, elems, cnv, storeempty)
+            storeempty = partial(cls._default_empty, elems, cnv)
+        fcn = partial(cls._default_apply, model, elems, cnv, storeempty)
         return cast(Callable, fcn)
 
     _INDEX = re.compile(r"(\w+)\[(\d+)\]")
-    def getvalue(self, mdl, keystr, default):
+
+    @classmethod
+    def getvalue(cls, mdl, keystr, default):
         "gets the value in the model"
         if isinstance(mdl, dict):
             return mdl[keystr]
 
         keys = keystr.split('.')
         for key in keys[:-1]:
-            match = self._INDEX.match(key)
+            match = cls._INDEX.match(key)
             if match:
                 mdl = getattr(mdl, match.group(1))[int(match.group(2))]
             else:
                 mdl = getattr(mdl, key)
 
-        match = self._INDEX.match(keys[-1])
+        match = cls._INDEX.match(keys[-1])
         if match:
             return getattr(mdl, match.group(1), default)[int(match.group(2))]
         return getattr(mdl, keys[-1], default)
 
-    def setvalue(self, mdl, keystr, val):
+    @classmethod
+    def setvalue(cls, mdl, keystr, val):
         "sets the value in the model"
         if isinstance(mdl, dict):
             mdl[keystr] = val
         else:
             keys     = keystr.split('.')
-            old, mdl = self.__getancestors(mdl, keys)
-            if self.__setsequence(old, mdl, keys, val):
-                if self.__setnamedtuple(old, mdl, keys, val):
-                    self.__setattr(mdl, keys, val)
+            old, mdl = cls.__getancestors(mdl, keys)
+            if cls.__setsequence(old, mdl, keys, val):
+                if cls.__setnamedtuple(old, mdl, keys, val):
+                    cls.__setattr(mdl, keys, val)
 
     @classmethod
     def __getancestors(cls, mdl, keys) -> Tuple[Any, Any]:
@@ -154,12 +161,14 @@ class Option(metaclass = ABCMeta):
 class ChoiceOption(Option):
     "Converts a text tag to an html check"
     _PATT = re.compile(Option.NAME+r'(?P<cols>(?:\|\w+\:[^|{}<>]+)*)\|')
-    def converter(self, model, body:str) -> Callable:
+    @classmethod
+    def converter(cls, model, body:str) -> Callable:
         "returns a method which sets values in a model"
-        elems = frozenset(i.group('name') for i in self._PATT.finditer(body))
-        return self._converter(model, elems, lambda x: x, AssertionError())
+        elems = frozenset(i.group('name') for i in cls._PATT.finditer(body))
+        return cls._converter(model, elems, lambda x: x, AssertionError())
 
-    def replace(self, model, body:str) -> str:
+    @classmethod
+    def replace(cls, model, body:str) -> str:
         "replaces a pattern by an html tag"
         def _replace(match):
             key   = match.group('name')
@@ -168,7 +177,7 @@ class ChoiceOption(Option):
             val   = ''
             try:
                 for i in match.group('cols')[1:].split("|"):
-                    val = self.getvalue(model, key, i.split(":")[0])
+                    val = cls.getvalue(model, key, i.split(":")[0])
                     break
             except Exception as exc: # pylint: disable=broad-except
                 LOGS.exception(exc)
@@ -180,7 +189,7 @@ class ChoiceOption(Option):
                 sel  = 'selected="selected" ' if i[0] == str(val) else ""
                 out += '<option {}value="{}">{}</option>'.format(sel, *i)
             return out.format(ident)+'</select>'
-        return self._PATT.sub(_replace, body)
+        return cls._PATT.sub(_replace, body)
 
 class CheckOption(Option):
     "Converts a text tag to an html check"
@@ -193,16 +202,18 @@ class CheckOption(Option):
             return False
         raise ValueError()
 
-    def converter(self, model, body:str) -> Callable:
+    @classmethod
+    def converter(cls, model, body:str) -> Callable:
         "returns a method which sets values in a model"
-        elems = frozenset(i.group('name') for i in self._PATT.finditer(body))
-        return self._converter(model, elems, self.__cnv, AssertionError())
+        elems = frozenset(i.group('name') for i in cls._PATT.finditer(body))
+        return cls._converter(model, elems, cls.__cnv, AssertionError())
 
-    def replace(self, model, body:str) -> str:
+    @classmethod
+    def replace(cls, model, body:str) -> str:
         "replaces a pattern by an html tag"
         def _replace(match):
             key  = match.group('name')
-            attr = self._addtoattr(
+            attr = cls._addtoattr(
                 match.group("attr"),
                 "class",
                 "bk bk-input"
@@ -210,7 +221,7 @@ class CheckOption(Option):
             assert len(key), "keys must have a name"
             val = ''
             try:
-                if bool(self.getvalue(model, key, False)):
+                if bool(cls.getvalue(model, key, False)):
                     val = "checked"
             except Exception as exc: # pylint: disable=broad-except
                 LOGS.exception(exc)
@@ -221,7 +232,7 @@ class CheckOption(Option):
                 +"</div>"
             )
 
-        return self._PATT.sub(_replace, body)
+        return cls._PATT.sub(_replace, body)
 
 class TextOption(Option):
     "Converts a text tag to an html text input"
@@ -336,19 +347,48 @@ class CSVOption(Option):
 
         return self._patt.sub(_replace, body)
 
+class TabOption(Option):
+    "Converts a text tag to an html check"
+    _PATT = re.compile(r"(?:^|\n)#*(?P<title>.*?)\[(?P<key>.*?)\s*:\s*(?P<val>.*?)\]")
+    @classmethod
+    def match(
+            cls, title:Optional[str]
+    ) -> Union[Tuple[Optional[str], None, None], Tuple[str, str, str]]:
+        "return the html version of the title"
+        if title:
+            match = cls._PATT.match(title)
+            if match is not None:
+                return cast(
+                    Tuple[str, str, str],
+                    tuple(map(match.group, ('title', 'key', 'val')))
+                )
+        return (title, None, None)
+
+    def converter(self, model, body:str) -> Callable:
+        "returns a method which sets values in a model"
+        elems = frozenset(i.group('key') for i in self._PATT.finditer(body))
+        return self._converter(model, elems, lambda x: x, AssertionError())
+
+    def replace(self, model, body:str) -> str:
+        "replaces a pattern by an html tag"
+        return body
+
 _PREC   = r'(?:\.(?P<prec>\d*))?'
 _OPT    = r'(?P<opt>o)?'
 def _int(val: str) -> int:
     return int(float(val)) if '.' in val else int(val)
 
-OPTIONS = (CheckOption(),
-           TextOption(_int,  _OPT+r'(?P<fmt>[idID])',     0),
-           TextOption(float, _PREC+_OPT+r'(?P<fmt>[fF])', 'prec'),
-           TextOption(str,   _OPT+r'(?P<width>\d*)s',    None),
-           CSVOption(_int,   _OPT+r'(?P<width>\d*)csv[id]'),
-           CSVOption(float,  _OPT+r'(?P<width>\d*)csvf'),
-           CSVOption(str,    _OPT+r'(?P<width>\d*)csv'),
-           ChoiceOption())
+OPTIONS = (
+    CheckOption(),
+    TextOption(_int,  _OPT+r'(?P<fmt>[idID])',     0),
+    TextOption(float, _PREC+_OPT+r'(?P<fmt>[fF])', 'prec'),
+    TextOption(str,   _OPT+r'(?P<width>\d*)s',    None),
+    CSVOption(_int,   _OPT+r'(?P<width>\d*)csv[id]'),
+    CSVOption(float,  _OPT+r'(?P<width>\d*)csvf'),
+    CSVOption(str,    _OPT+r'(?P<width>\d*)csv'),
+    ChoiceOption(),
+    TabOption()
+)
 
 def _build_elem(val):
     if isinstance(val, tuple):
@@ -401,7 +441,7 @@ def fromhtml(
             )
 
         converters = [i.converter(model, body) for i in OPTIONS]
-        ordered    = sorted(itms.items(), key = lambda i: body.index('%('+i[0]))
+        ordered    = sorted(itms.items(), key = lambda i: body.find('%('+i[0]))
         if context is None:
             for i in ordered:
                 any(cnv(*i) for cnv in converters)

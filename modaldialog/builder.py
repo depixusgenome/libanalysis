@@ -8,6 +8,7 @@ from   typing.io import TextIO # pylint: disable=import-error
 import re
 
 from   utils.logconfig import getLogger
+from   .options        import TabOption
 LOGS   = getLogger(__name__)
 
 ModelType = TypeVar('ModelType')
@@ -150,10 +151,10 @@ class BodyParser:
         return (
             (
                 "<div>"
-                +"".join(cls.__htmltitle(i, j[0],  cur) for i, j in enumerate(tabs))
+                +"".join(cls.__jointab_title(i, j[0],  cur) for i, j in enumerate(tabs))
                 +"</div>"
             )
-            +"".join(cls.__htmlbody(i, j[1], cur)  for i, j in enumerate(tabs))
+            +"".join(cls.__jointab_body(i, j[1], cur)  for i, j in enumerate(tabs))
         )
 
     @staticmethod
@@ -207,14 +208,15 @@ class BodyParser:
             tabs.append(cls.__totab(lines, model, default))
 
         title = cls.__title(body) if ntitles == 1 else None
-        return title, cls.jointabs(tabs)
+        return title, cls.jointabs(tabs, cls.__getcurrenttab(tabs, model))
 
-    @staticmethod
-    def __htmltitle(btn:int, title:Optional[str], ind: int) -> str:
+    @classmethod
+    def __jointab_title(cls, btn:int, title:Optional[str], ind: int) -> str:
         "return the html version of the title"
-        fcn  = "Bokeh.DpxModal.prototype.clicktab"
-        head = "cur" if btn == ind else ""
-        return (
+        title, key, val = TabOption.match(title)
+        fcn             = "Bokeh.DpxModal.prototype.clicktab"
+        head            = "cur" if btn == ind else ""
+        out             = (
             "<button type='button'"
             +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}btn'"
             +f" id='bbm-dpx-btn-{btn}'"
@@ -222,11 +224,28 @@ class BodyParser:
             +f'{title if title else "Page "+str(btn)}</button>'
         )
 
+        if key is not None:
+            out.replace('<button', f'<button tabkey="{key}" tabvalue="{val}"')
+        return out
+
     @staticmethod
-    def __htmlbody(btn:int, body, ind:int) -> str:
+    def __jointab_body(btn:int, body, ind:int) -> str:
         "return the html version of the body"
         head = 'curtab' if btn == ind else 'hidden'
         return f'<div class="bbm-dpx-{head}" id="bbm-dpx-tab-{btn}">{body}</div>'
+
+    _TITLEKV = re.compile(r"^(?P<title>.*?)\[(?P<key>.*?)\s*:\s*(?P<val>.*?)\]")
+    _NONE    = type('_NONE', (), {})
+    @classmethod
+    def __getcurrenttab(cls, tabs: List[Tuple[Optional[str], str]], model: ModelType) -> int:
+        kvmatch = ((i, cls._TITLEKV.match(cast(str, j[0]))) for i, j in enumerate(tabs) if j[0])
+        kvlist  = ((i, map(j.group, ('key', 'val'))) for i, j in kvmatch if j)
+        for i, (j, k) in kvlist:
+            val = TabOption.getvalue(model, j, cls._NONE)
+            if val is cls._NONE or k != str(val):
+                continue
+            return i
+        return 0
 
     @classmethod
     def __parseargs(cls, model, default, body: List[str]) -> List[List[str]]:

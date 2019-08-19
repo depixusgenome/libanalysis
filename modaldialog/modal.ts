@@ -533,6 +533,19 @@ class DpxModalDialogView extends Modal {
         ref = jQuery(this.modalEl).find('#dpxbbmform input[type=checkbox]:not(:checked)')
         for(let i = 0; i < ref.length; ++i)
             vals[ref[i].name] = 'off'
+
+        let elems = document.getElementsByClassName("bbm-dpx-curbtn")
+        for(let i = 0; i < elems.length; ++i){
+            let el = elems[i]
+            if(el != null)
+            {
+                let attrv = el.getAttribute("tabvalue")
+                let attrk = el.getAttribute("tabkey")
+                if(attrv != null && attrk != null)
+                    vals[attrk] = attrv
+            }
+
+        }
         return vals
     }
 

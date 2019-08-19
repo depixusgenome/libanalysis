@@ -292,6 +292,53 @@ def test_check():
     assert mdl.first is False
     assert mdl.second == [False]
 
+def test_tabkv():
+    "test tab key-value parsing"
+
+    mdl = _Dummy(
+        first  = True,
+        second = [False],
+        third  = [_Dummy(third = [False])],
+        tab    = "aaa"
+    )
+    txt = """
+        ## tab 1 [tab:mmm]
+        1 %(first)b
+        ## tab 2 [tab:aaa]
+        2 %(second[0])b
+    """
+
+    truth = (
+        "<div>"
+        "<button type='button' class='bk bk-btn bk-btn-default bbm-dpx-btn' "
+        """id='bbm-dpx-btn-0' onclick="Bokeh.DpxModal.prototype.clicktab(0)">"""
+        "tab 1 </button>"
+        "<button type='button' class='bk bk-btn bk-btn-default bbm-dpx-curbtn' "
+        """id='bbm-dpx-btn-1' onclick="Bokeh.DpxModal.prototype.clicktab(1)">"""
+        "tab 2 </button>"
+        "</div>"
+        """<div class="bbm-dpx-hidden" id="bbm-dpx-tab-0"><table><tr ><td>"""
+        "1 %(first)b</td></tr></table></div>"
+        """<div class="bbm-dpx-curtab" id="bbm-dpx-tab-1"><table><tr ><td>"""
+        "2 %(second[0])b</td></tr></table></div>"
+    )
+    assert build.tohtml(txt, mdl)['body'].strip() == truth
+
+    itms = {'tab': 'mmm'}
+    assert opts.fromhtml(itms, txt, mdl) is None
+    assert getattr(mdl, 'tab') == 'mmm'
+
+    truth = (
+        truth
+        .replace('bbm-dpx-curbtn', '___')
+        .replace('bbm-dpx-btn\'', 'bbm-dpx-curbtn\'')
+        .replace('___', 'bbm-dpx-btn')
+        .replace('bbm-dpx-curtab', '___')
+        .replace('bbm-dpx-hidden', 'bbm-dpx-curtab')
+        .replace('___', 'bbm-dpx-hidden')
+    )
+    assert build.tohtml(txt, mdl)['body'].strip() == truth
+
 def test_choice(monkeypatch):
     "test int option"
 
