@@ -309,30 +309,27 @@ def test_tabkv():
     """
 
     truth = (
-        "<div>"
-        "<button type='button' class='bk bk-btn bk-btn-default bbm-dpx-btn' "
-        """id='bbm-dpx-btn-0' onclick="Bokeh.DpxModal.prototype.clicktab(0)">"""
-        "tab 1 </button>"
-        "<button type='button' class='bk bk-btn bk-btn-default bbm-dpx-curbtn' "
-        """id='bbm-dpx-btn-1' onclick="Bokeh.DpxModal.prototype.clicktab(1)">"""
-        "tab 2 </button>"
-        "</div>"
-        """<div class="bbm-dpx-hidden" id="bbm-dpx-tab-0"><table><tr ><td>"""
-        "1 %(first)b</td></tr></table></div>"
-        """<div class="bbm-dpx-curtab" id="bbm-dpx-tab-1"><table><tr ><td>"""
-        "2 %(second[0])b</td></tr></table></div>"
+        """<div class='bk bk-btn-group'><button type='button' tabkey="tab" """
+        """tabvalue="mmm"  class='bk bk-btn bk-btn-default bbm-dpx-btn' """
+        """id='bbm-dpx-btn-0' onclick="Bokeh.DpxModal.prototype.clicktab(0)">tab 1 """
+        """</button><button type='button' tabkey="tab" tabvalue="aaa"  """
+        """class='bk bk-btn bk-btn-default bbm-dpx-curbtn bk-active' """
+        """id='bbm-dpx-btn-1' onclick="Bokeh.DpxModal.prototype.clicktab(1)">tab 2 """
+        """</button></div><div class="bbm-dpx-hidden" id="bbm-dpx-tab-0"><table><tr >"""
+        """<td>1 %(first)b</td></tr></table></div><div class="bbm-dpx-curtab" """
+        """id="bbm-dpx-tab-1"><table><tr ><td>2 %(second[0])b</td></tr></table></div>"""
     )
     assert build.tohtml(txt, mdl)['body'].strip() == truth
 
     itms = {'tab': 'mmm'}
-    assert opts.fromhtml(itms, txt, mdl) is None
+    assert opts.fromhtml(itms, truth, mdl) is None
     assert getattr(mdl, 'tab') == 'mmm'
 
     truth = (
         truth
-        .replace('bbm-dpx-curbtn', '___')
-        .replace('bbm-dpx-btn\'', 'bbm-dpx-curbtn\'')
-        .replace('___', 'bbm-dpx-btn')
+        .replace('curbtn bk-active', '___')
+        .replace('bbm-dpx-btn\'', 'bbm-dpx-curbtn bk-active\'')
+        .replace('___', 'btn')
         .replace('bbm-dpx-curtab', '___')
         .replace('bbm-dpx-hidden', 'bbm-dpx-curtab')
         .replace('___', 'bbm-dpx-hidden')

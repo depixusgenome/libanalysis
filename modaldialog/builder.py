@@ -150,7 +150,7 @@ class BodyParser:
         """
         return (
             (
-                "<div>"
+                "<div class='bk bk-btn-group'>"
                 +"".join(cls.__jointab_title(i, j[0],  cur) for i, j in enumerate(tabs))
                 +"</div>"
             )
@@ -213,20 +213,17 @@ class BodyParser:
     @classmethod
     def __jointab_title(cls, btn:int, title:Optional[str], ind: int) -> str:
         "return the html version of the title"
-        title, key, val = TabOption.match(title)
-        fcn             = "Bokeh.DpxModal.prototype.clicktab"
-        head            = "cur" if btn == ind else ""
-        out             = (
+        title, key, val, tags = TabOption.match(title)
+        head                  = "curbtn bk-active" if btn == ind else "btn"
+        return (
             "<button type='button'"
-            +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}btn'"
+            +(f' tabkey="{key}" tabvalue="{val}" ' if key else "tabvalue='-'")
+            +(f' {tags} ' if tags else "")
+            +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}'"
             +f" id='bbm-dpx-btn-{btn}'"
-            +f' onclick="{fcn}({btn})">'
+            +f' onclick="Bokeh.DpxModal.prototype.clicktab({btn})">'
             +f'{title if title else "Page "+str(btn)}</button>'
         )
-
-        if key is not None:
-            out.replace('<button', f'<button tabkey="{key}" tabvalue="{val}"')
-        return out
 
     @staticmethod
     def __jointab_body(btn:int, body, ind:int) -> str:

@@ -24,16 +24,20 @@
 
 .bbm-views {
   width: 100%;
-  box-sizing: border-box; }
-.bbm-dpx-btn {
+  box-sizing: border-box;
+}
+
+.bbm-dpx-btn[tabvalue='-'] {
     border: none!important;
     border-radius: 0px 0px 0px 0px !important;
 }
 
-.bbm-dpx-curbtn {
+.bbm-dpx-curbtn[tabvalue='-'] {
     border-bottom: none!important;
     border-radius: 5px 5px 0px 0px !important;
 }
+
+.bbm-dpx-btn[disabled] { opacity: .20!important; }
 
 /* Style the tab content */
 .bbm-dpx-hidden {
@@ -42,7 +46,7 @@
 }
 .bbm-dpx-curtab {
     width: -moz-available;
-    border: 1px solid lightgray;
+    border-top: 5px solid lightgray;
     border-bottom: none!important;
     border-right: none!important;
     border-left: none!important;

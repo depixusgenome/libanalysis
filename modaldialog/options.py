@@ -349,24 +349,27 @@ class CSVOption(Option):
 
 class TabOption(Option):
     "Converts a text tag to an html check"
-    _PATT = re.compile(r"(?:^|\n)#*(?P<title>.*?)\[(?P<key>.*?)\s*:\s*(?P<val>.*?)\]")
+    _PATT = re.compile(
+        r"(?:^|\n)\s*(?P<title>.*?)\[(?P<key>.*?)\s*:\s*(?P<val>[^\]]*)\]?\s*(?:!(?P<tags>[^!]*)!)?"
+    )
+    _FIND = re.compile(r'tabkey="(?P<key>[^"]*)"')
     @classmethod
     def match(
             cls, title:Optional[str]
-    ) -> Union[Tuple[Optional[str], None, None], Tuple[str, str, str]]:
+    ) -> Union[Tuple[Optional[str], None, None, None], Tuple[str, str, str, str]]:
         "return the html version of the title"
         if title:
             match = cls._PATT.match(title)
             if match is not None:
                 return cast(
-                    Tuple[str, str, str],
-                    tuple(map(match.group, ('title', 'key', 'val')))
+                    Tuple[str, str, str, str],
+                    tuple(map(match.group, ('title', 'key', 'val', 'tags')))
                 )
-        return (title, None, None)
+        return (title, None, None, None)
 
     def converter(self, model, body:str) -> Callable:
         "returns a method which sets values in a model"
-        elems = frozenset(i.group('key') for i in self._PATT.finditer(body))
+        elems = frozenset(i.group('key') for i in self._FIND.finditer(body))
         return self._converter(model, elems, lambda x: x, AssertionError())
 
     def replace(self, model, body:str) -> str:

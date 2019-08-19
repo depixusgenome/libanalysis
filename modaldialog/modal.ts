@@ -672,6 +672,7 @@ export class DpxModal extends Model {
             if(el != null){
                 el.classList.add("bbm-dpx-btn")
                 el.classList.remove("bbm-dpx-curbtn")
+                el.classList.remove("bk-active")
             }
         }
 
@@ -685,6 +686,7 @@ export class DpxModal extends Model {
         if(el != null){
             el.classList.remove("bbm-dpx-btn")
             el.classList.add("bbm-dpx-curbtn")
+            el.classList.add("bk-active")
         }
     }
 
