@@ -188,11 +188,11 @@ def modifykeys(data, *args, **kwa):
 
     ```python
     data["key1"] = dict(key2 = 1)
-    modifykey(data,  "key1", "key2", lambda val: val*2)
+    modifykeys(data,  "key1", "key2", lambda val: val*2)
     assert data["key1"]["key2"] = 2
 
     data = {}
-    modifykey(data,  "key1", "key2", lambda val: val*2)
+    modifykeys(data,  "key1", "key2", lambda val: val*2)
     ```
     """
     for key in args[:None if len(kwa) else -2]:
@@ -202,7 +202,7 @@ def modifykeys(data, *args, **kwa):
         else:
             return
 
-    if len(kwa):
+    if not len(kwa):
         data[args[-2]] =  args[-1](data[args[-2]])
     else:
         for key, val in kwa.items():
