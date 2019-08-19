@@ -148,9 +148,14 @@ class BodyParser:
         -------
         The HTML string for all tabs
         """
+        head = (
+            "<div class='bk bk-btn-group'>"
+            if any(TabOption.match(i)[-1] for i,_ in tabs) else
+            "<div>"
+        )
         return (
             (
-                "<div class='bk bk-btn-group'>"
+                head
                 +"".join(cls.__jointab_title(i, j[0],  cur) for i, j in enumerate(tabs))
                 +"</div>"
             )

@@ -402,7 +402,7 @@ def _build_elem(val):
 def _dummy():
     yield
 
-def tohtml(body: Union[str, Iterable[str]], model: Any) -> str:
+def tohtml(body: Union[str, Iterable], model: Any) -> str:
     """
     Convert to html, parsing the lines for inputs
     """
@@ -412,14 +412,17 @@ def tohtml(body: Union[str, Iterable[str]], model: Any) -> str:
     else:
         lines = list(body)
         if len(lines) > 0:
-            strbody = (
-                '<table>'
-                + ''.join(
-                    f"<tr>{''.join(_build_elem(i) for i in j)}</tr>"
-                    for j in body
+            if hasattr(lines[0], 'tohtml'):
+                strbody = lines[0].tohtml(lines)
+            else:
+                strbody = (
+                    '<table>'
+                    + ''.join(
+                        f"<tr>{''.join(_build_elem(i) for i in j)}</tr>"
+                        for j in body
+                    )
+                    + '</table>'
                 )
-                + '</table>'
-            )
 
     if strbody:
         for tpe in OPTIONS:
