@@ -171,6 +171,8 @@ class BaseSeleniumAccess:
             return getattr(self.driver, f"{fcn}class_name")(name[1:])
         if name.startswith("/"):
             return getattr(self.driver, f"{fcn}xpath")(name)
+        if name.startswith("css:"):
+            return getattr(self.driver, f"{fcn}css_selector")(name[4:])
         raise NotImplementedError()
 
     def __setitem__(self, name, value):
