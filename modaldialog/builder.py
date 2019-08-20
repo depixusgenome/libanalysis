@@ -150,7 +150,7 @@ class BodyParser:
         """
         head = (
             "<div class='bk bk-btn-group'>"
-            if any(TabOption.match(i)[-1] for i,_ in tabs) else
+            if any(TabOption.match(i)[-2] for i,_ in tabs) else
             "<div>"
         )
         return (
@@ -222,7 +222,7 @@ class BodyParser:
         head                  = "curbtn bk-active" if btn == ind else "btn"
         return (
             "<button type='button'"
-            +(f' tabkey="{key}" tabvalue="{val}" ' if key else "tabvalue='-'")
+            +(f' tabkey="{key}" tabvalue="{val}" ' if key else " tabvalue='-'")
             +(f' {tags} ' if tags else "")
             +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}'"
             +f" id='bbm-dpx-btn-{btn}'"
