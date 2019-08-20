@@ -259,11 +259,10 @@ class BodyParser:
 
         out     = [cls._SPLIT.split(j) for j in body]
         for lst in out:
-            args = [(j, cls._ARG.match(j)) for j in lst]
-            vals = [cls.__eval(k, model)   for j, k in args]
-            dfl  = [cls.__eval(k, default) for j, k in args]
-            if any(k != l for k, l in zip(vals, dfl)):
-                lst[0] += f"({', '.join(dfl)})"
+            args = (cls._ARG.match(j) for j in lst if '%(' in j)
+            vals = [(cls.__eval(k, model), cls.__eval(k, default)) for k in args]
+            if any(k != l for k, l in vals):
+                lst[0] += f" ({', '.join(f'<u>{l}</u>' if k != l else f'{l}' for k, l in vals)})"
         return out
 
     @classmethod
