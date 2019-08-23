@@ -6,7 +6,7 @@ from    collections         import OrderedDict
 from    contextlib          import contextmanager
 from    enum                import Enum
 from    time                import time
-from    typing              import TypeVar, Generic, cast
+from    typing              import TypeVar, Generic
 
 from    bokeh.document      import Document
 from    bokeh.models        import Model
@@ -27,6 +27,7 @@ class DisplayState(Enum):
     disabled     = 'disabled'
     outofdate    = 'outofdate'
 
+
 class BaseModel(ABC):
     "basic display model"
     def reset(self, _):
@@ -35,17 +36,27 @@ class BaseModel(ABC):
     def clear(self):
         "clear the model"
 
+
 MODEL   = TypeVar('MODEL', bound = BaseModel)
 DISPLAY = TypeVar("DISPLAY")
 THEME   = TypeVar("THEME")
+
+
 class DisplayModel(Generic[DISPLAY, THEME], BaseModel):
     "Basic model for time series"
     display: DISPLAY
     theme:   THEME
+
     def __init__(self, **kwa):
         super().__init__()
-        self.display = cast(DISPLAY, _tattr(self, 0)(**kwa))
-        self.theme   = cast(THEME,   _tattr(self, 1)(**kwa))
+
+        def _create(ind):
+            cls  = _tattr(self, ind)
+            keys = getattr(cls, '__dataclass_fields__', kwa)
+            return cls(**{i: j for i, j in kwa.items() if i in keys})
+
+        self.display = _create(0)
+        self.theme   = _create(1)
 
     def observe(self, ctrl) -> bool:
         """
@@ -53,9 +64,12 @@ class DisplayModel(Generic[DISPLAY, THEME], BaseModel):
         """
         if self.theme in ctrl.theme:
             return True
-        ctrl.theme.add(self.theme)
-        ctrl.display.add(self.display)
+        if hasattr(self.theme, 'name'):
+            ctrl.theme.add(self.theme)
+        if hasattr(self.display, 'name'):
+            ctrl.display.add(self.display)
         return False
+
 
 class _OrderedDict(OrderedDict):
     def __missing__(self, key):
@@ -63,7 +77,8 @@ class _OrderedDict(OrderedDict):
         self[key]   = value
         return value
 
-class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
+
+class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-methods
     "Base plotter class"
     def __init__(self, model: MODEL = None, **kwa) -> None:
         "sets up this plotter's info"
@@ -74,8 +89,10 @@ class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
 
     def action(self, ctrl, fcn = None):
         "decorator which starts a user action but only if state is set to active"
-        test   = lambda *_1, **_2: self._state is DisplayState.active
-        action = ctrl.action.type(ctrl, test = test)
+        action = ctrl.action.type(
+            ctrl,
+            test = lambda *_1, **_2: self._state is DisplayState.active
+        )
         return action if fcn is None else action(fcn)
 
     def delegatereset(self, ctrl, cache):
@@ -156,6 +173,7 @@ class ThreadedDisplay(Generic[MODEL]): # pylint: disable=too-many-public-methods
     if SINGLE_THREAD:
         # use this for single-thread debugging
         LOGS.info("Running in single-thread mode")
+
         def __doreset(self, ctrl, _):
             start = time()
             with self.resetting() as cache:
