@@ -14,7 +14,11 @@ import  random
 import  numpy                   as np
 
 from    utils.logconfig         import getLogger
+
+
 LOGS  = getLogger()
+
+
 class Option(metaclass = ABCMeta):
     "Converts a text tag to an html input"
     NAME  = r'%\((?P<name>[\w\.\[\]]*)\s*(?:{\s*(?P<attr>[^{}]*?)?\s*}\s*)?\)'
@@ -48,7 +52,7 @@ class Option(metaclass = ABCMeta):
             cls.setvalue(model, key, '')
 
     @classmethod
-    def _default_apply(# pylint: disable=too-many-arguments
+    def _default_apply(  # pylint: disable=too-many-arguments
             cls, model, elems, cnv, storeempty, key, val
     ):
         if key not in elems:
@@ -57,7 +61,7 @@ class Option(metaclass = ABCMeta):
         if val != '':
             try:
                 converted = cnv(val)
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGS.exception(exc)
             else:
                 cls.setvalue(model, key, converted)
@@ -130,13 +134,21 @@ class Option(metaclass = ABCMeta):
             return True
         try:
             ind = int(match.group(2))
-            if isinstance(mdl, tuple):
-                val = type(mdl)(*(val if i == ind else mdl[i] for i in range(len(mdl))))
+
+            if isinstance(getattr(mdl, match.group(1)), tuple):
+                old, mdl = mdl, getattr(mdl, match.group(1))
+                val      = type(mdl)(val if i == ind else mdl[i] for i in range(len(mdl)))
+                setattr(old, match.group(1), val)
+
+            elif isinstance(mdl, tuple):
+                val = type(mdl)(val if i == ind else mdl[i] for i in range(len(mdl)))
                 setattr(old, keys[-2], val)
             else:
                 getattr(mdl, match.group(1))[ind] = val
         except AttributeError as exc:
             raise AttributeError(f"Can't set {mdl}{keys[-1]} = {val}") from exc
+        except TypeError as exc:
+            raise TypeError(f"Can't set {mdl}{keys[-1]} = {val}") from exc
         return False
 
     @classmethod
@@ -157,6 +169,7 @@ class Option(metaclass = ABCMeta):
             setattr(mdl, keys[-1], val)
         except AttributeError as exc:
             raise AttributeError(f"Can't set {mdl}.{keys[-1]} = {val}") from exc
+
 
 class ChoiceOption(Option):
     "Converts a text tag to an html check"
@@ -179,7 +192,7 @@ class ChoiceOption(Option):
                 for i in match.group('cols')[1:].split("|"):
                     val = cls.getvalue(model, key, i.split(":")[0])
                     break
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:   # pylint: disable=broad-except
                 LOGS.exception(exc)
                 attr += " disabled='true'"
 
@@ -190,6 +203,7 @@ class ChoiceOption(Option):
                 out += '<option {}value="{}">{}</option>'.format(sel, *i)
             return out.format(ident)+'</select>'
         return cls._PATT.sub(_replace, body)
+
 
 class CheckOption(Option):
     "Converts a text tag to an html check"
@@ -223,16 +237,17 @@ class CheckOption(Option):
             try:
                 if bool(cls.getvalue(model, key, False)):
                     val = "checked"
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGS.exception(exc)
                 attr += " disabled='true'"
             return (
                 '<div class ="bk bk-input-group">'
-                +'<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
-                +"</div>"
+                + '<input type="checkbox" name="{}" {} {}/>'.format(key, val, attr)
+                + "</div>"
             )
 
         return cls._PATT.sub(_replace, body)
+
 
 class TextOption(Option):
     "Converts a text tag to an html text input"
@@ -259,7 +274,7 @@ class TextOption(Option):
             attr  = info.get('attr', '') or ''
             try:
                 opt += self.__value(model, key, info)
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGS.exception(exc)
                 attr += " disabled='true'"
 
@@ -271,8 +286,7 @@ class TextOption(Option):
             return inpt.format(tpe, key, opt, attr)
 
         tpe = 'text' if self._cnv is str else 'number'
-        fcn = lambda i: _replace(i.groupdict(), tpe)
-        return self._patt.sub(fcn, body)
+        return self._patt.sub((lambda i: _replace(i.groupdict(), tpe)), body)
 
     def __step(self, info) -> str:
         return (
@@ -292,6 +306,7 @@ class TextOption(Option):
         elif info.get(self._step, None) is not None:
             val = np.around(val, int(info[self._step]))
         return ' value="{}"'.format(val)
+
 
 class CSVOption(Option):
     "Converts a text tag to an html text input"
@@ -326,7 +341,7 @@ class CSVOption(Option):
             val  = None
             try:
                 val  = self.getvalue(model, key, None)
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGS.exception(exc)
                 attr += " disabled='true'"
 
@@ -346,6 +361,7 @@ class CSVOption(Option):
             return inpt.format(key, opt, attr)
 
         return self._patt.sub(_replace, body)
+
 
 class TabOption(Option):
     "Converts a text tag to an html check"
@@ -376,10 +392,13 @@ class TabOption(Option):
         "replaces a pattern by an html tag"
         return body
 
+
 _PREC   = r'(?:\.(?P<prec>\d*))?'
 _OPT    = r'(?P<opt>o)?'
+
 def _int(val: str) -> int:
     return int(float(val)) if '.' in val else int(val)
+
 
 OPTIONS = (
     CheckOption(),
@@ -393,14 +412,17 @@ OPTIONS = (
     TabOption()
 )
 
+
 def _build_elem(val):
     if isinstance(val, tuple):
         return f'<td style="{val[0]}">'+val[1]+'</td>'
     return f'<td>'+val+'</td>'
 
+
 @contextmanager
 def _dummy():
     yield
+
 
 def tohtml(body: Union[str, Iterable], model: Any) -> str:
     """
@@ -428,6 +450,7 @@ def tohtml(body: Union[str, Iterable], model: Any) -> str:
         for tpe in OPTIONS:
             strbody = tpe.replace(model, strbody)
     return strbody
+
 
 def fromhtml(
         itms: Dict[str, Any],
@@ -459,6 +482,6 @@ def fromhtml(
             with context(**kwa):
                 for i in ordered:
                     any(cnv(*i) for cnv in converters)
-    except Exception as exc: # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except
         LOGS.exception(exc)
         raise
