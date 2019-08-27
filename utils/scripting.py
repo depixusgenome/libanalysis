@@ -144,8 +144,8 @@ def run(locs, direct, star, jupyter):
         if _isjupyter():
             def tutorial():
                 "clues for the beginner"
-                display = __import__('IPython.display').display
-                mkdown  = __import__('IPython.display').Markdown
+                display = importlib.import_module('IPython.display').display
+                mkdown  = importlib.import_module('IPython.display').Markdown
                 display(mkdown(locs['TUTORIAL']))
             locs['tutorial'] = tutorial
         else:
