@@ -10,19 +10,60 @@ from   pathlib     import Path
 from   functools   import wraps
 from   inspect     import ismethod as _ismeth, isfunction as _isfunc, getmembers
 from   enum        import Enum
-from   typing      import Set, Union, Optional, Sequence, Dict, cast
+from   typing      import Set, Union, Optional, Sequence, Dict, cast, TYPE_CHECKING
 
 import numpy       as     np
 from   .inspection import ismethod
 from   .logconfig  import getLogger
 
+if TYPE_CHECKING:
+    from   bokeh.models import Div
+
 LOGS = getLogger(__name__)
+
+def downloadjs(figure, code, fname: str, tooltip = "Save to CSV", **kwa) -> 'Div':
+    "return download js code"
+    from   bokeh.models import Div, CustomAction, CustomJS  # pylint: disable=redefined-outer-name
+    assert 'csvFile' in code
+    figure.tools = (
+        figure.tools
+        + [
+            CustomAction(
+                action_tooltip = tooltip,
+                callback       = CustomJS(
+                    code = code + """
+
+                        var blob = new Blob([csvFile], { type: 'text/csv;charset=UTF-8' });
+                        if (navigator.msSaveBlob) { // IE 10+
+                            navigator.msSaveBlob(blob, "temperatures.csv");
+                        } else {
+                            var link = document.createElement("a");
+                            if (link.download !== undefined) { // feature detection
+                                // Browsers that support HTML5 download attribute
+                                var url = URL.createObjectURL(blob);
+                                link.setAttribute("href", url);
+                                link.setAttribute("download", "temperatures.csv");
+                                link.style.visibility = 'hidden';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }
+                        }
+                    """.replace('temperatures.csv', fname),
+                    args = kwa
+                )
+            )
+        ]
+    )
+
+    text = "<link rel='stylesheet' type='text/css' href='view/qualitycontrol.css'>"
+    return Div(text = text, width = 0, height = 0)
 
 def coffee(apath: Union[str,Path], name:Optional[str] = None, **kwa) -> str:
     u"returns the javascript implementation code"
     path = Path(apath)
     if name is not None:
-        path = path.parent / name # type: ignore
+        path = path.parent / name  # type: ignore
 
     src = Path(path.with_suffix(".coffee")).read_text()
     for title, val in kwa.items():
@@ -36,6 +77,7 @@ def monkeypatchbokehcompiler():
         return
 
     import bokeh.util.compiler as _compiler
+
     def calc_cache_key(custom_models):
         ''' Generate a key to cache a custom extension implementation with.
 
@@ -109,10 +151,11 @@ class MetaMixin(type):
     """
     def __new__(mcs, clsname, bases, nspace, **kw):
         mixins = kw['mixins']
+
         def setMixins(self, instances = None, initargs = None):
             u"sets-up composed mixins"
             for base in mixins:
-                name =  base.__name__.lower()
+                name = base.__name__.lower()
                 if instances is not None and name in instances:
                     setattr(self, name, instances[name])
                 elif getattr(self, name, None) is None:
@@ -130,6 +173,7 @@ class MetaMixin(type):
         nspace['getMixin'] = getMixin
 
         init = nspace.get('__init__', lambda *_1, **_2: None)
+
         def __init__(self, **kwa):
             init(self, **kwa)
             for base in bases:
@@ -142,7 +186,7 @@ class MetaMixin(type):
         mnames = tuple(base.__name__.lower() for base in mixins)
         nspace['_mixins'] = property(lambda self: (getattr(self, i) for i in mnames))
 
-        dummy = lambda *_1, **_2: tuple()
+        dummy = lambda *_1, **_2: tuple()  # noqa
 
         def _callmixins(self, name, *args, **kwa):
             for mixin in getattr(self, '_mixins'):
@@ -159,7 +203,7 @@ class MetaMixin(type):
     @classmethod
     def __addaccesses(mcs, mixins, nspace, kwa):
         match   = re.compile(kwa.get('match', r'^[a-z][a-zA-Z0-9]+$')).match
-        members = dict() # type: ignore
+        members = dict()  # type: ignore
         for base in mixins:
             for name, fcn in getmembers(base):
                 if match(name) is None or name in nspace:
@@ -218,7 +262,7 @@ def startfile(filepath:str):
         os.chdir(os.path.dirname(filepath))
         # pylint: disable=no-member
         try:
-            os.startfile(os.path.split(filepath)[-1]) # type: ignore
+            os.startfile(os.path.split(filepath)[-1])  # type: ignore
         except OSError as exc:
             if 'Application not found' not in str(exc):
                 raise
