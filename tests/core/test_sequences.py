@@ -149,6 +149,7 @@ def test_splits():
     assert splitoligos((':+AtG;', 'att,cc')) == ['+atg', 'att', 'cc']
     assert splitoligos(iter((':+AtG;', 'att,cc'))) == ['+atg', 'att', 'cc']
     assert splitoligos((i for i in (':+AtG;', 'att,cc'))) == ['+atg', 'att', 'cc']
+
     def _iter():
         yield ':+AtG;'
         yield 'att,cc'
@@ -162,6 +163,12 @@ def test_splits():
         "4mer",
         path = "test035_5HPs_mix_CTGT--4xAc_5nM_25C_10sec.trk"
     ) == ["ctgt"]
+
+    assert splitoligos("kmer", path = "GTG_BNA_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
+    assert splitoligos("kmer", path = "GTG_LNA_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
+    assert splitoligos("kmer", path = "GTG_2amino_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
+    assert splitoligos("kmer", path = "GTG_2amino_dATP_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
+
 
 _MODES = [
     ('o', 'CTAG',  'GATC',   (2.955491253e-05, 33835.3225, 0.72671001, -3.0670222, -57.58380)),
@@ -186,6 +193,7 @@ _MODES = [
     ('f',  "CGGGG", "CCCCC", (0.0004952853667, 2019.03804, 3.47707491, -7.4513254, -31.68077))
 ]
 
+
 @pytest.mark.parametrize("mode,seq,oligo", [i[:3] for i in _MODES])
 def test_oldmt(mode, seq, oligo):
     "test melting times"
@@ -199,6 +207,7 @@ def test_oldmt(mode, seq, oligo):
     if mode == 'o':
         out   = cnf(oligo[::-1], seq[::-1])
         assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
+
 
 _MODES2 = [
     *_MODES[:10],
@@ -223,6 +232,7 @@ _MODES2 = [
     ('f',  "CCCCC", "CGGGG", (4.025846e-04,      2.483950e+03, 0.412147, -5.111531,  -45.86586))
 ]
 
+
 @pytest.mark.parametrize("mode,seq,oligo", [i[:3] for i in _MODES2])
 def test_mt(mode, seq, oligo):
     "test melting times"
@@ -236,6 +246,7 @@ def test_mt(mode, seq, oligo):
         cnf   = TransitionStats(oligo[::-1], '3-0'+seq[::-1], force = 0 if mode == "o" else 8.5)
         out   = cnf.statistics(*(('hpin',) if mode == "o" else ()), ini = 'hybridized')
         assert_allclose(out, list(truth), rtol=5e-4, atol=5e-8)
+
 
 _MODES3 = [
     (
@@ -264,6 +275,7 @@ _MODES3 = [
         (1.007220e-03,  9.928316e+02,  1.269253e+00, -7.153378e+00, -3.739555e+01)
     ),
 ]
+
 
 @pytest.mark.parametrize(
     "args",

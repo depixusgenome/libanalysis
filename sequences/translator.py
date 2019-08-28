@@ -113,13 +113,13 @@ import  numpy       as np
 from    utils       import initdefaults
 from    .io         import read
 
-PEAKS_DTYPE = [('position', 'i4'), ('orientation', 'bool')] # pylint: disable=invalid-name
-PEAKS_TYPE  = Sequence[Tuple[int, bool]]                    # pylint: disable=invalid-name
+PEAKS_DTYPE = [('position', 'i4'), ('orientation', 'bool')]  # pylint: disable=invalid-name
+PEAKS_TYPE  = Sequence[Tuple[int, bool]]                     # pylint: disable=invalid-name
 Oligos      = Union[Iterable[Union[str, Pattern, None]], str, Pattern, None]
 Sequences   = Union[Dict[str, str], str, Path]
 Paths       = Union[Iterable[Union[str, Path]], str, Path]
 
-def _create_comple()->np.ndarray:
+def _create_comple() -> np.ndarray:
     out = np.zeros(256, dtype = '<U1')
     for _ in range(256):
         out[_] = chr(_)
@@ -290,7 +290,7 @@ class Translator:
         if len(olist) == 0:
             return np.empty((0,), dtype = PEAKS_DTYPE)
 
-        vals  = dict() # type: Dict[int, bool]
+        vals  = dict()  # type: Dict[int, bool]
         vals.update(cls.__get(False, seq, olist, flags))
         vals.update(cls.__get(True, seq, olist, flags))
         return np.array(sorted(vals.items()), dtype = PEAKS_DTYPE)
@@ -316,7 +316,7 @@ class OligoPathParser:
     )
 
     _MER:  ClassVar[str]      = (
-        r'(?:_|^)(?P<ol>[atgc]+)(?:\-*\dxac)*_*'
+        r'(?:_|^)(?P<ol>[atgc]+)(?:\-*\dxac)*_*(?:2amino(?:_*datp)*|[lbr]na)*_*'
         r'(?P<id>\d+(?:[.dp]\d+)*)(?P<unit>[np]M)(?:_|$)'
     )
     _KMER: ClassVar[Pattern] = re.compile(_MER, re.IGNORECASE)
@@ -363,7 +363,7 @@ class OligoPathParser:
             return
 
         tosplit: str      = ''
-        stems:   Set[str] = { Path(str(i)).stem for i in cls._splat(path) }
+        stems:   Set[str] = {Path(str(i)).stem for i in cls._splat(path)}
         cur:     Union[str, Pattern]
         for cur in set(cls._splat(oligos)):
             if isinstance(cur, str):
@@ -380,7 +380,7 @@ class OligoPathParser:
                 match: Optional[Match] = cur.search(stem)
                 while match is not None:
                     tosplit += ','+match.group('ol')
-                    pos      = match.span()[1] -1
+                    pos      = match.span()[1] - 1
                     match    = cur.search(stem, pos)
         yield from cls.split(tosplit)
 
@@ -416,11 +416,13 @@ class OligoPathParser:
             ret.append(cls.END[1])
         return ret
 
+
 del _create_comple
-peaks             = Translator.peaks             # pylint: disable=invalid-name
-complement        = Translator.complement        # pylint: disable=invalid-name
-reversecomplement = Translator.reversecomplement # pylint: disable=invalid-name
-splitoligos       = OligoPathParser.splitoligos  # pylint: disable=invalid-name
+peaks             = Translator.peaks              # pylint: disable=invalid-name
+complement        = Translator.complement         # pylint: disable=invalid-name
+reversecomplement = Translator.reversecomplement  # pylint: disable=invalid-name
+splitoligos       = OligoPathParser.splitoligos   # pylint: disable=invalid-name
+
 
 def marksequence(seq:str, oligs: Sequence[str]) -> str:
     u"Returns a sequence with oligos to upper case"
@@ -511,7 +513,7 @@ class NonLinearities(Translator):
         """
         returns the difference to the a single strand in nm
         """
-        size  = np.zeros(len(self.sequence), dtype = 'f4') # type: ignore
+        size  = np.zeros(len(self.sequence), dtype = 'f4')  # type: ignore
         diff  = self.doublestrand - self.singlestrand
         allo  = (oligos,) if isinstance(oligos, str) else oligos
         for olig in cast(Iterable[str], allo):
@@ -532,8 +534,8 @@ class NonLinearities(Translator):
         double = size+single
         return double - np.polyval(np.polyfit(single, double, 1), single)
 
-_GC = re.compile("[gcs]", re.IGNORECASE)
-def gccontent(seq):
+
+def gccontent(seq, _gc_ = re.compile("[gcs]", re.IGNORECASE)):
     """Calculate G+C content, return percentage (as float between 0 and 100).
 
     Copes mixed case sequences, and with the ambiguous nucleotide S (G or C)
@@ -546,4 +548,4 @@ def gccontent(seq):
 
     Note that this will return zero for an empty sequence.
     """
-    return sum(1 for _ in _GC.finditer(seq)) * 100.0 / max(1, len(seq))
+    return sum(1 for _ in _gc_.finditer(seq)) * 100.0 / max(1, len(seq))
