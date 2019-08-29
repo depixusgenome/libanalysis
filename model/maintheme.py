@@ -6,7 +6,7 @@ basic theme
 from typing import List
 from utils  import dflt, dataclass
 
-DARK = {"Figure" : {"background_fill_color": "#20262B",
+DARK = {"Figure":  {"background_fill_color": "#20262B",
                     "border_fill_color": "#15191C",
                     "outline_line_color": "#E0E0E0",
                     "outline_line_alpha": 0.25},
@@ -33,8 +33,8 @@ class AppTheme:
     main theme
     """
     name:        str       = 'theme'
-    tabheight:   int       = 1000
-    appsize:     List[int] = dflt([1200, tabheight])
+    tabheight:   int       = 800
+    appsize:     List[int] = dflt([1000, tabheight])
     borders:     int       = 5
     figtbheight: int       = 48
     appname:     str       = ''
@@ -44,14 +44,14 @@ class MainTheme:
     """
     main theme
     """
-    name        : str  = 'main'
-    sizingmode  : str  = 'fixed'
-    colorblue   : str  = '#6baed6'
-    dark        : dict = dflt({"attrs": DARK})
-    basic       : dict = dflt({})
-    customdark  : dict = dflt({})
-    customlight : dict = dflt({})
-    themename   : str  = 'dark'
+    name:        str  = 'main'
+    sizingmode:  str  = 'fixed'
+    colorblue:   str  = '#6baed6'
+    dark:        dict = dflt({"attrs": DARK})
+    basic:       dict = dflt({})
+    customdark:  dict = dflt({})
+    customlight: dict = dflt({})
+    themename:   str  = 'dark'
 
     @property
     def theme(self) -> dict:

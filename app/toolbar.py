@@ -18,17 +18,21 @@ class _AppName:
 class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
     "A view with the toolbar on top"
     APPNAME = _AppName()
-    def __init__(self, ctrl = None, **kwa):
-        get = lambda x: cast(type, templateattribute(self, x))
-        assert not isinstance(get(0), cast(type, TypeVar))
-        theme     = ctrl.theme.model("theme")
-        self._bar = get(0)(ctrl = ctrl, width = theme.appsize[0], **kwa)
+    _bar:      TOOLBAR
+    _mainview: VIEW
 
-        ctrl.theme.updatedefaults(
-            "theme",
-            tabheight = theme.appsize[1] - self._bar.gettoolbarheight()
+    def __init__(self, ctrl = None, **kwa):
+        assert not isinstance(templateattribute(self, 0), cast(type, TypeVar))
+        self._bar = templateattribute(self, 0)(ctrl = ctrl, **kwa)
+
+        theme     = ctrl.theme.model("theme")
+        height    = min(
+            theme.tabheight,
+            theme.appsize[1] - self._bar.gettoolbarheight() - theme.borders
         )
-        self._mainview  = get(1)(ctrl = ctrl, **kwa)
+        ctrl.theme.updatedefaults("theme", tabheight = height)
+        ctrl.theme.update("theme", tabheight = height)
+        self._mainview  = templateattribute(self, 1)(ctrl = ctrl, **kwa)
 
     def ismain(self, ctrl):
         "sets-up the main view as main"
@@ -71,7 +75,8 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
 
 def toolbarview(tbar, main) -> type:
     "return the view with toolbar"
-    cls = getclass(tbar), getclass(main) # pylint: disable=unused-variable
-    class ToolbarView(ViewWithToolbar[cls]): # type: ignore
+    cls = getclass(tbar), getclass(main)      # pylint: disable=unused-variable
+
+    class ToolbarView(ViewWithToolbar[cls]):  # type: ignore
         "Toolbar view"
     return ToolbarView

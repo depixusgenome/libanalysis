@@ -14,25 +14,8 @@ from tornado.ioloop      import IOLoop
 from control.action      import ActionDescriptor
 
 SINGLE_THREAD = False
+POOL          = ThreadPoolExecutor(1)
 
-class View(ABC):
-    "Classes to be passed a controller"
-    action      = ActionDescriptor()
-    computation = ActionDescriptor()
-    def __init__(self, ctrl = None, **_):
-        "initializes the gui"
-        self._ctrl = ctrl
-
-    def observe(self, ctrl):
-        "whatever needs to be initialized"
-
-    def ismain(self, ctrl):
-        "Allows setting-up stuff only when the view is the main one"
-
-    def close(self):
-        "closes the application"
-
-POOL = ThreadPoolExecutor(1)
 async def threadmethod(fcn, *args, pool = None, **kwa):
     "threads a method"
     if pool is None:
@@ -60,35 +43,11 @@ def defaultsizingmode(self, kwa:dict = None, ctrl = None, **kwargs) -> dict:
 
 def defaulttabsize(ctrl) -> Dict[str, int]:
     "the default sizing mode"
+    borders = ctrl.theme.get("theme", "borders")
     return dict(
-        width  = ctrl.theme.get("theme", "appsize")[0],
-        height = ctrl.theme.get("theme", "tabheight")
+        width = ctrl.theme.get("theme", "appsize")[0] - 2*borders,
+        height = ctrl.theme.get("theme", "tabheight") - 2*borders
     )
-
-class BokehView(View):
-    "A view with a gui"
-    def __init__(self, ctrl = None, **kwargs):
-        "initializes the gui"
-        super().__init__(ctrl = ctrl, **kwargs)
-        self._doc:  Document        = None
-
-    def close(self):
-        "closes the application"
-        super().close()
-        self._doc  = None
-
-    def addtodoc(self, _, doc):
-        "Adds one's self to doc"
-        self._doc = doc
-
-    @staticmethod
-    def defaulttabsize(ctrl) -> Dict[str, int]:
-        "the default tab size"
-        return defaulttabsize(ctrl)
-
-    def defaultsizingmode(self, kwa = None, **kwargs) -> dict:
-        "the default sizing mode"
-        return defaultsizingmode(self, kwa, **kwargs)
 
 def stretchout(root: Union[Row, Column, GridBox], strategy = 1) -> Union[Row, Column, GridBox]:
     "set the sizing_mode to stretch_both for all but widget boxes"
@@ -121,3 +80,47 @@ def stretchout(root: Union[Row, Column, GridBox], strategy = 1) -> Union[Row, Co
                 if hasattr(j, 'sizing_mode') and _hasfig(j)
             ]
     return root
+
+
+class View(ABC):
+    "Classes to be passed a controller"
+    action      = ActionDescriptor()
+    computation = ActionDescriptor()
+
+    def __init__(self, ctrl = None, **_):
+        "initializes the gui"
+        self._ctrl = ctrl
+
+    def observe(self, ctrl):
+        "whatever needs to be initialized"
+
+    def ismain(self, ctrl):
+        "Allows setting-up stuff only when the view is the main one"
+
+    def close(self):
+        "closes the application"
+
+class BokehView(View):
+    "A view with a gui"
+    def __init__(self, ctrl = None, **kwargs):
+        "initializes the gui"
+        super().__init__(ctrl = ctrl, **kwargs)
+        self._doc:  Document        = None
+
+    def close(self):
+        "closes the application"
+        super().close()
+        self._doc  = None
+
+    def addtodoc(self, _, doc):
+        "Adds one's self to doc"
+        self._doc = doc
+
+    @staticmethod
+    def defaulttabsize(ctrl) -> Dict[str, int]:
+        "the default tab size"
+        return defaulttabsize(ctrl)
+
+    def defaultsizingmode(self, kwa = None, **kwargs) -> dict:
+        "the default sizing mode"
+        return defaultsizingmode(self, kwa, **kwargs)

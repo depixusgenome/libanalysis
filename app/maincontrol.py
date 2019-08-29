@@ -63,6 +63,7 @@ class WithMessage:
 class DisplayController(DecentralizedController):
     "All temporary information related to one application run"
     CATCHERROR = True
+
     def __repr__(self):
         return "DisplayControl"
 
@@ -144,10 +145,11 @@ class BaseSuperController:
     These share a common dictionnary of handlers
     """
     APPNAME     = 'Track Analysis'
-    APPSIZE     = [1200, 1000]
+    APPSIZE     = list(AppTheme().appsize)
     FLEXXAPP    = None
     action      = ActionDescriptor()
     computation = ActionDescriptor()
+
     def __init__(self, view, **kwa):
         self.topview = view
         self.undos   = UndoController(**kwa)
@@ -176,7 +178,7 @@ class BaseSuperController:
 
         self.writeuserconfig()
         for i in tuple(self.__dict__.values()) + (top, self.FLEXXAPP):
-            getattr(i, 'close', lambda : None)()
+            getattr(i, 'close', lambda: None)()
 
     def writeuserconfig(self, name = None, saveall = False, index = 0, **kwa):
         "writes the config"
@@ -205,7 +207,7 @@ class BaseSuperController:
         def _test(msg):
             try:
                 yield
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGS.critical(msg)
                 LOGS.exception(msg)
                 if doc:
@@ -233,7 +235,7 @@ class BaseSuperController:
                     self._bokeh(keys, doc)
                 with _test("Could not handle applicationstarted event"):
                     self.display.handle('applicationstarted', self.display.emitpolicy.nothing)
-        except: # pylint: disable=bare-except
+        except Exception:  # pylint: disable=broad-except
             pass
         return self
 
@@ -338,7 +340,6 @@ class BaseSuperController:
                  'config': {'catcherror': DisplayController.CATCHERROR}}
         maps = cnf.readuserconfig(maps, update = True)
         return maps
-
 
     def _observeargs(self):
         raise NotImplementedError()

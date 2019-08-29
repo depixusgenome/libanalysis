@@ -7,9 +7,10 @@ import  appdirs
 from    utils.logconfig        import logToFile
 from    utils.inspection       import getclass
 from    anastore.configuration import readconfig, writeconfig
+from    model.maintheme        import AppTheme
 if TYPE_CHECKING:
     # pylint: disable=unused-import
-    from .maincontrol          import BaseSuperController
+    from .maincontrol          import BaseSuperController  # noqa
 
 CATCHERROR = True
 class ConfigurationIO:
@@ -19,7 +20,7 @@ class ConfigurationIO:
     def __init__(self, app) -> None:
         app          = getattr(app, 'MainControl', app)
         self.appname = getattr(app, 'APPNAME',     app)
-        self.appsize = getattr(app, 'APPSIZE', [1200, 1000])
+        self.appsize = list(getattr(app, 'APPSIZE', AppTheme().appsize))
 
     def apppath(self) -> Path:
         "returns the path to local appdata directory"
@@ -80,21 +81,23 @@ class ConfigurationIO:
     @classmethod
     def createview(cls, controls, views) -> type:
         "imports controls & returns the views & appname"
-        get      = lambda i: getclass(i) if isinstance(i, str) else i
+        def _get(itm):
+            return getclass(itm) if isinstance(itm, str) else itm
 
-        controls = tuple(get(i) for i in controls)
-        views    = tuple(get(i) for i in views if get(i))
+        controls = tuple(_get(i) for i in controls)
+        views    = tuple(_get(i) for i in views if _get(i))
         appname  = next((i.APPNAME for i in views if hasattr(i, 'APPNAME')), None)
         if appname is None:
             appname = views[0].__name__.replace('view', '')
 
-        class Main: # type: ignore
+        class Main:  # type: ignore
             "The main view"
             APPNAME     = appname
             MainControl = cast(Type['BaseSuperController'],
                                type('MainControl', controls[:1],
                                     dict(APPNAME = appname)))
             VIEWS       = views
+
             def __init__(self, ctrl = None, **kwa):
                 self.views = tuple(i(ctrl = ctrl, **kwa) for i in self.VIEWS)
 
