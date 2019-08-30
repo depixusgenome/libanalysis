@@ -21,9 +21,29 @@ if TYPE_CHECKING:
 
 LOGS = getLogger(__name__)
 
-def downloadjs(figure, code, fname: str, tooltip = "Save to CSV", **kwa) -> 'Div':
+def downloadjs(figure, fname: str, code = None, tooltip = "Save to CSV", **kwa) -> 'Div':
     "return download js code"
     from   bokeh.models import Div, CustomAction, CustomJS  # pylint: disable=redefined-outer-name
+    if code is None:
+        assert 'src' in kwa
+        code    = """
+            var cols    = src.columns();
+            var icol    = 0;
+            var ecol    = cols.length;
+            var ind     = 0;
+            var ie      = src.data[cols[0]].length;
+            var csvFile = "";
+            for (icol = 0; icol+1 < ecol; ++icol)
+                csvFile += cols[icol]+";"
+            csvFile += cols[ecol-1]+"\\n"
+            for(ind = 0; ind < ie; ++ind)
+            {
+                for (icol = 0; icol+1 < ecol; ++icol)
+                    csvFile += src.data[cols[icol]][ind].toString()+',';
+                csvFile += src.data[cols[ecol-1]][ind].toString()+'\\n';
+            }
+        """
+
     assert 'csvFile' in code
     figure.tools = (
         figure.tools
