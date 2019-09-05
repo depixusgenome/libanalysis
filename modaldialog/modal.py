@@ -25,6 +25,7 @@ class DpxModal(Model):
     startdisplay       = props.Int(0)
     keycontrol         = props.Bool(True)
     callback           = props.Instance(Callback)
+
     def __init__(self, **kwa):
         super().__init__(**kwa)
         self.__handler: Optional[Callable] = None
@@ -35,26 +36,28 @@ class DpxModal(Model):
         self.on_change('results',   self._onresults_cb)
 
     def run(self,                                       # pylint: disable=too-many-arguments
-            title   : str                       = "",
-            body    : Union[Sequence[str],str]  = "",
+            title:    str                       = "",
+            body:     Union[Sequence[str],str]  = "",
             callback: Callback                  = None,
-            context : Callable[[str], Any]      = None,
+            context:  Callable[[str], Any]      = None,
             model                               = None,
             buttons                             = "",
+            keycontrol: bool                    = True,
             always                              = False):
         "runs the modal dialog"
         self.__handler = (
             None if isinstance(callback, Callback) or model is None else
             (lambda x: fromhtml(x, body, model)) if context is None else
-            (lambda x: fromhtml(x, body, model, lambda : context(title))) # type: ignore
+            (lambda x: fromhtml(x, body, model, lambda: context(title)))  # type: ignore
         )
         self.__always  = always
         self.__running = False
-        self.update(title    = title,
-                    body     = tohtml(body, model),
-                    callback = callback,
-                    buttons  = buttons,
-                    results  = {})
+        self.update(title      = title,
+                    body       = tohtml(body, model),
+                    callback   = callback,
+                    buttons    = "none" if buttons is None else buttons,
+                    keycontrol = keycontrol,
+                    results    = {})
         self.__running      = True
         self.startdisplay   = self.startdisplay+1
 

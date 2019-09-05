@@ -4,7 +4,7 @@
 Methods for building modal dialogs
 """
 from   typing    import List, Dict, Tuple, Optional, Iterable, TypeVar, Union, cast
-from   typing.io import TextIO # pylint: disable=import-error
+from   typing.io import TextIO  # pylint: disable=import-error
 import re
 
 from   utils.logconfig import getLogger
@@ -15,7 +15,7 @@ ModelType = TypeVar('ModelType')
 
 def tohtml(
         body:    Union[str, Iterable[str]],
-        model:   ModelType,
+        model:   Optional[ModelType] = None,
         default: Optional[ModelType] = None
 ) -> Dict[str, Optional[str]]:
     """
@@ -97,7 +97,7 @@ class BodyParser:
     def tohtml(
             cls,
             body:    Union[str, Iterable[str]],
-            model:   ModelType,
+            model:   Optional[ModelType] = None,
             default: Optional[ModelType] = None
     ) -> Dict[str, Optional[str]]:
         "Creates the dialog's body. see module method for documentation"
@@ -127,7 +127,7 @@ class BodyParser:
 
         try:
             out: Tuple[Optional[str], str] = cls.__tohtml(lines, model, default)
-        except Exception as exc: # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except
             LOGS.exception(exc)
             out = "Error!", f"<p>{str(exc)}</p>"
         return dict(body = out[1], title = out[0])
@@ -156,10 +156,10 @@ class BodyParser:
         return (
             (
                 head
-                +"".join(cls.__jointab_title(i, j[0],  cur) for i, j in enumerate(tabs))
-                +"</div>"
+                + "".join(cls.__jointab_title(i, j[0],  cur) for i, j in enumerate(tabs))
+                + "</div>"
             )
-            +"".join(cls.__jointab_body(i, j[1], cur)  for i, j in enumerate(tabs))
+            + "".join(cls.__jointab_body(i, j[1], cur)  for i, j in enumerate(tabs))
         )
 
     @staticmethod
@@ -222,12 +222,12 @@ class BodyParser:
         head                  = "curbtn bk-active" if btn == ind else "btn"
         return (
             "<button type='button'"
-            +(f' tabkey="{key}" tabvalue="{val}" ' if key else " tabvalue='-'")
-            +(f' {tags} ' if tags else "")
-            +f" class='bk bk-btn bk-btn-default bbm-dpx-{head}'"
-            +f" id='bbm-dpx-btn-{btn}'"
-            +f' onclick="Bokeh.DpxModal.prototype.clicktab({btn})">'
-            +f'{title if title else "Page "+str(btn)}</button>'
+            + (f' tabkey="{key}" tabvalue="{val}" ' if key else " tabvalue='-'")
+            + (f' {tags} ' if tags else "")
+            + f" class='bk bk-btn bk-btn-default bbm-dpx-{head}'"
+            + f" id='bbm-dpx-btn-{btn}'"
+            + f' onclick="Bokeh.DpxModal.prototype.clicktab({btn})">'
+            + f'{title if title else "Page "+str(btn)}</button>'
         )
 
     @staticmethod
@@ -290,8 +290,8 @@ class BodyParser:
                 ]
                 txt.append(
                     f"<tr {styles[0][1]}><td>{styles[0][0]}</td>{'<td></td>' * (maxv-len(i))}"
-                    +''.join(f"<td {j[1]}>{j[0]}</td>" for j in styles[1:])
-                    +'</tr>'
+                    + ''.join(f"<td {j[1]}>{j[0]}</td>" for j in styles[1:])
+                    + '</tr>'
                 )
             txt.append("</table>")
         return ''.join(txt)
@@ -319,11 +319,13 @@ def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Opti
     else:
         return None
 
-    newtab = lambda x: [x.split('>')[1].split('<')[0].split('_')[1], ""]
-    tabs: List[List[str]] = [newtab(line)]  # type: ignore
+    def _newtab(txt: str) -> List[str]:
+        return [txt.split('>')[1].split('<')[0].split('_')[1], ""]
+
+    tabs: List[List[str]] = [_newtab(line)]  # type: ignore
     for line in stream:
         if line.startswith('<h2'):
-            tabs.append(newtab(line))
+            tabs.append(_newtab(line))
         elif line.startswith('<h1'):
             break
         else:
@@ -343,7 +345,7 @@ def changelog(stream:TextIO, appname:str, docpath: Optional[str] = None) -> Opti
                 }}
 
                 a:hover, a:active {{ background-color: darkgreen;}}
-            </style> 
+            </style>
             <a href="{docpath}/{appname}/{appname}.html" target="_blank" style="float:right;">
                 Read the doc!!!
             </a>

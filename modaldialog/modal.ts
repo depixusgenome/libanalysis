@@ -640,7 +640,9 @@ export class DpxModal extends Model {
                 "</div>"
 
         let btns = ""
-        if(this.buttons == "")
+        if(this.buttons == "none")
+            btns  = "";
+        else if(this.buttons == "")
             btns  = `<div class='bbm-modal__bottombar ${bkclass} bk-root'>`         +
                 `<button type='button' class='${bkclass} bk-btn bk-btn-default ` +
                         "dpx-modal-cancel'>Cancel</button>"                         +
@@ -694,7 +696,9 @@ export class DpxModal extends Model {
         let mdl = new DpxModalDialogView({model: this})
         mdl.keyControl = this.keycontrol
         mdl.$el = jQuery(mdl.el)
-        return jQuery('.dpx-modal-div').html(mdl.render().el)
+        jQuery('.dpx-modal-div').html(mdl.render().el)
+        if(this.body == "")
+            mdl.triggerCancel();
     }
 
     static initClass(): void {

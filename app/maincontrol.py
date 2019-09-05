@@ -276,9 +276,13 @@ class BaseSuperController:
         for mdl in orders().dynloads():
             getattr(sys.modules.get(mdl, None), 'document', lambda x: None)(doc)
 
-        first = next(iter(self.topview.views), None)
-        roots = getattr(first, 'addtodoc', lambda *_: None)(self, doc)
-        if roots is None:
+        roots = [
+            getattr(i, 'addtodoc', lambda *_: None)(self, doc)
+            for i in self.topview.views
+        ]
+        roots = [i for i in roots if i is not None]
+
+        if not roots:
             return
 
         self.theme.initializetheme(doc)
