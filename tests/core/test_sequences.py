@@ -164,10 +164,15 @@ def test_splits():
         path = "test035_5HPs_mix_CTGT--4xAc_5nM_25C_10sec.trk"
     ) == ["ctgt"]
 
-    assert splitoligos("kmer", path = "GTG_BNA_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
-    assert splitoligos("kmer", path = "GTG_LNA_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
-    assert splitoligos("kmer", path = "GTG_2amino_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
-    assert splitoligos("kmer", path = "GTG_2amino_dATP_5nM_PhiX-174_1-1000_FOV1_test033") == ['gtg']
+    for i in (
+            "GTG_BNA_5nM_PhiX-174_1-1000_FOV1_test033",
+            "GTG_LNA_5nM_PhiX-174_1-1000_FOV1_test033",
+            "GTG_2amino_5nM_PhiX-174_1-1000_FOV1_test033",
+            "GTG_2amino_dATP_5nM_PhiX-174_1-1000_FOV1_test033"
+    ):
+        for j in ('_', '-'):
+            for k in ('', 'xxx_'):
+                assert splitoligos("kmer", path = f"{k}{i}".replace("_", j)) == ['gtg']
 
 
 _MODES = [
