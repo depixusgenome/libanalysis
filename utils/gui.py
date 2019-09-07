@@ -10,7 +10,9 @@ from   pathlib     import Path
 from   functools   import wraps
 from   inspect     import ismethod as _ismeth, isfunction as _isfunc, getmembers
 from   enum        import Enum
-from   typing      import Set, Union, Optional, Sequence, Dict, cast, TYPE_CHECKING
+from   typing      import (
+    List, Tuple, Iterable, Set, Union, Optional, Sequence, Dict, cast, TYPE_CHECKING
+)
 
 import numpy       as     np
 from   .inspection import ismethod
@@ -20,6 +22,24 @@ if TYPE_CHECKING:
     from   bokeh.models import Div
 
 LOGS = getLogger(__name__)
+
+def relativepath(paths: Iterable[Union[str, Path]]) -> Tuple[Path, List[Path]]:
+    "returns a list of relative paths"
+    orig: List[Tuple[str, ...]] = [Path(str(i)).parts for i in paths]
+    root: Path                  = Path("")
+    if len(orig) < 2:
+        return root, [root.joinpath(*i) for i in orig]
+
+    imin: int = min(len(j) for j in orig)
+    imax: int = next(
+        (
+            i+1
+            for i in range(imin-1, -1, -1)
+            if all(orig[0][i] == j[i] for j in orig[1:])
+        ),
+        0
+    )
+    return root.joinpath(*orig[0][:imax]), [root.joinpath(*i[imax:]) for i in orig]
 
 def downloadjs(figure, fname: str, code = None, tooltip = "Save to CSV", **kwa) -> 'Div':
     "return download js code"

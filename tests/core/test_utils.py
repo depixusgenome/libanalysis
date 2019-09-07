@@ -13,7 +13,9 @@ import numpy as np
 from   utils              import escapenans, fromstream
 from   utils.array        import popclip
 from   utils.decoration   import addto, extend, addproperty
-from   utils.gui          import intlistsummary, parseints, leastcommonkeys
+from   utils.gui          import (
+    intlistsummary, parseints, leastcommonkeys, relativepath
+)
 from   utils.datadump     import LazyShelf
 from   utils.array        import EventsArray, repeat, asobjarray, asdataarrays
 from   utils.lazy         import LazyInstError, LazyInstanciator, LazyDict
@@ -701,6 +703,25 @@ def test_popclip():
     popclip(arr)
     np.testing.assert_equal(vals[1:-1], arr[1:-1])
     assert np.all(np.isnan(arr[[0,-1]]))
+
+def test_relativepath():
+    "test relativepath"
+    root, vals = relativepath(("aaa/bbb/ccc", "aaa/bbb_xxx", "aaa/mmm"))
+    assert str(root) == "aaa"
+    assert [str(i) for i in vals] == ["bbb/ccc", "bbb_xxx", "mmm"]
+
+    root, vals = relativepath(("aaa/bbb/ccc", "aaa/bbb_xxx", "aaam/mmm"))
+    assert root == pathlib.Path("")
+    assert [str(i) for i in vals] == ["aaa/bbb/ccc", "aaa/bbb_xxx", "aaam/mmm"]
+
+    root, vals = relativepath(())
+    assert root == pathlib.Path("")
+    assert vals == []
+
+    root, vals = relativepath(("aaa/bbb/ccc",))
+    assert root == pathlib.Path("")
+    assert [str(i) for i in vals] == ["aaa/bbb/ccc"]
+
 
 if __name__ == '__main__':
     test_rescaler()
