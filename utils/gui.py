@@ -34,7 +34,7 @@ def relativepath(paths: Iterable[Union[str, Path]]) -> Tuple[Path, List[Path]]:
     imax: int = next(
         (
             i+1
-            for i in range(imin-1, -1, -1)
+            for i in range(imin-2, -1, -1)
             if all(orig[0][i] == j[i] for j in orig[1:])
         ),
         0
