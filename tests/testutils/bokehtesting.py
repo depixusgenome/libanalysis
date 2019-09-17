@@ -311,6 +311,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         self.doc:    Document = None
         self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
         self.kwa              = kwa
+        self.kwa.setdefault('runtime', 'selenium')
         self.headless         = (
             os.environ.get("DPX_TEST_HEADLESS", '').lower().strip() in ('true', '1', 'yes')
             or 'DISPLAY' not in os.environ
