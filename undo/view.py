@@ -9,17 +9,17 @@ class UndoView(View):
     def __init__(self, ctrl = None, **kwa):
         super().__init__(ctrl = ctrl, **kwa)
         self.__curr = [None]
-        ctrl.theme.updatedefaults  ('keystroke',
-                                    undo = "Control-z",
-                                    redo = "Control-y")
-        ctrl.display.updatedefaults('keystroke',
-                                    undo = ctrl.undos.undo,
-                                    redo = ctrl.undos.redo)
+        ctrl.theme.updatedefaults(
+            'keystroke', undo = "Control-z", redo = "Control-y"
+        )
+        ctrl.display.updatedefaults(
+            'keystroke', undo = ctrl.undos.undo, redo = ctrl.undos.redo
+        )
 
     def __wrapper(self, fcn):
         @wraps(fcn)
-        def _wrap(*args, **kwargs):
-            if self.__curr[0] is not None:
+        def _wrap(*args, calldepth = None, **kwargs):
+            if self.__curr[0] is not None and calldepth == 1:
                 val = fcn(*args, **kwargs)
                 if val is not None:
                     self.__curr[0].append(val)

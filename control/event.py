@@ -3,16 +3,24 @@
 "Base event handler"
 import re
 
+from enum               import Enum, unique
 from itertools          import product
 from functools          import wraps, partial
-from enum               import Enum, unique
-from typing             import (Dict, Union, Sequence, Callable, Tuple, Any, Set,
-                                Optional, List, cast)
+from pathlib            import Path
+from typing             import (
+    Dict, Union, Sequence, Callable, Tuple, Any, Set, ClassVar, Pattern, Type,
+    Iterable, Optional, List, FrozenSet,cast)
 
 import pickle
 from utils              import ismethod, isfunction, toenum
 from utils.logconfig    import getLogger
-LOGS = getLogger(__name__)
+
+LOGS         = getLogger(__name__)
+
+_CNT         = [0]
+_COMPLETIONS = Dict[Callable, Set[Pattern]]
+_HANDLERS    = Dict[str, Union[Set[Callable], _COMPLETIONS]]
+_OBSERVERS   = Union['HashFunc', Callable, staticmethod]
 
 class NoEmission(Exception):
     "can be raised to stop an emission"
@@ -25,6 +33,7 @@ class EmitPolicy(Enum):
     inputs      = 2
     nothing     = 3
     annotations = 4
+
     @classmethod
     def get(cls, policy:'EmitPolicy', fcn) -> 'EmitPolicy':
         "returns the correct policy"
@@ -46,26 +55,31 @@ class EmitPolicy(Enum):
                 cls.outastuple  if issubclass(rta, (tuple, list))   else
                 policy)
 
-    def run(self, allfcns: Set[Callable], args):
+    def run(self, allfcns: Set[Callable], calldepth: int, args):
         "runs provided observers"
-        calllater: List[Callable[[], None]] = []
+        calllater: List[Callable[[],None]] = []
+        kwa       = dict(
+            calllater = calllater,
+            calldepth = calldepth
+        )
         if   self is self.outasdict:
             dargs = cast(Dict, args)
             for hdl in allfcns:
                 LOGS.debug("observer %s", hdl)
-                hdl(**dargs, calllater = calllater)
+                hdl(**dargs, **kwa)
         elif self is self.outastuple:
             for hdl in allfcns:
                 LOGS.debug("observer %s", hdl)
-                hdl(*args, calllater = calllater)
+                hdl(*args, **kwa)
         elif self is self.nothing:
             for hdl in allfcns:
                 LOGS.debug("observer %s", hdl)
-                hdl(calllater = calllater)
+                hdl(**kwa)
         else:
             for hdl in allfcns:
                 LOGS.debug("observer %s", hdl)
-                hdl(*args[0], **args[1], calllater = calllater)
+                hdl(*args[0], **args[1], **kwa)
+
         for i in calllater:
             LOGS.debug("callater %s", i)
             i()
@@ -74,6 +88,7 @@ class EventHandlerContext:
     "handle a list of events repeatedly"
     _fcns:      Callable
     _policy:    EmitPolicy
+
     def __init__(self, ctrl, lst, policy, args):
         self._ctrl   = ctrl
         self._lst    = lst
@@ -91,33 +106,135 @@ class EventHandlerContext:
         "handle events"
         _CNT[0] += 1
         LOGS.debug("[%d] Handling %s (%s)", _CNT[0], self._lst, self._ctrl)
-        self._policy.run(self._fcns, args)
+        self._policy.run(self._fcns, 0, args)
         LOGS.debug("[%d] Handled %s (%s)", _CNT[0], self._lst, self._ctrl)
 
     __call__ = handle
 
-_CNT         = [0]
-_COMPLETIONS = Dict[Callable, Set[Callable]]
-_HANDLERS    = Dict[str, Union[Set[Callable], _COMPLETIONS]]
+class HashFunc:
+    """wrap a fonction such that its hash is the functon name & code line number"""
+    __slots__ = ('_func', '_hash', '_str')
+    __OBS_NAME: ClassVar[Pattern] = re.compile(r'^_*?on_*?(\w+)', re.IGNORECASE)
+    __EM_NAME:  ClassVar[Pattern] = re.compile(r'^_*?(\w+)',     re.IGNORECASE)
+
+    def __init__(self, fcn: _OBSERVERS, hashing = None):
+        if isinstance(fcn, cast(type, staticmethod)):
+            fcn = getattr(fcn, '__func__')
+
+        elif ismethod(fcn):
+            raise NotImplementedError(
+                "observe cannot decorate a method unless it's a static one"
+            )
+
+        self._func = fcn
+
+        if isinstance(fcn, HashFunc):
+            self._func = getattr(fcn, '_func')
+            self._hash = getattr(fcn, '_hash')
+            self._str  = getattr(fcn, '_str')
+            return
+
+        if hasattr(hashing, '_hash'):
+            self._hash = getattr(hashing, '_hash')
+            self._str  = getattr(hashing, '_str')
+            return
+
+        hashf = self.callable(hashing if callable(hashing) else fcn)
+        if not hasattr(hashf, '__qualname__'):
+            hashf = getattr(hashf, '__call__')
+
+        self._str  = (
+            hashf.__qualname__,
+            hashf.__code__.co_filename,
+            hashf.__code__.co_firstlineno,
+            hashing
+        )
+        self._hash = hash(self._str)
+
+    def __repr__(self):
+        return f"FWrap<{self._str[0]}@{Path(self._str[1]).stem}:{self._str[2]} [{self._hash}]"
+
+    @classmethod
+    def hashwith(cls, *args):
+        "wraps a function in a HashFunc"
+        def _wrapper(fcn):
+            if isinstance(fcn, cls):
+                fcn = getattr(fcn, '_func')
+            return cls(fcn, hash(args) if args else None)
+        return _wrapper
+
+    @classmethod
+    def funcname(cls, fcn: _OBSERVERS) -> str:
+        "return the name of the method inside an object"
+        return cls.callable(fcn).__name__
+
+    @classmethod
+    def eventname(cls, fcn: _OBSERVERS) -> str:
+        "return the event name of the method inside an object"
+        match = cls.__OBS_NAME.match(cls.funcname(fcn))
+        return match.group(1).lower().strip() if match else ''
+
+    @classmethod
+    def emissionname(cls, fcn: _OBSERVERS) -> str:
+        "return the event name of the method inside an object"
+        match = cls.__EM_NAME.match(cls.funcname(fcn))
+        if match is None:
+            raise KeyError(f"Could not find emission name in {fcn}")
+        return match.group(1).lower().strip()
+
+    @classmethod
+    def observable(cls, fcn) -> bool:
+        "return whether the argument can be an observer"
+        return isinstance(fcn, cls) or isfunction(fcn)
+
+    @staticmethod
+    def callable(fcn: _OBSERVERS) -> Callable:
+        "return the callable inside an object"
+        if isinstance(fcn, HashFunc):
+            fcn = getattr(fcn, '_func')
+
+        if isinstance(fcn, (classmethod, staticmethod)):
+            fcn = fcn.__func__
+        if isinstance(fcn, partial):
+            fcn = fcn.func
+        return cast(Callable, fcn)
+
+    def __eq__(self, other):
+        return other.__class__ is HashFunc and getattr(other, '_hash') == self._hash
+
+    def __hash__(self):
+        return self._hash
+
+    def __call__(self, *args, **kwa):
+        return self._func(*args, **kwa)
+
 class Event:
     "Event handler class"
-    emitpolicy  = EmitPolicy
-    __SIMPLE    = cast(Callable, re.compile(r'^(\w|\.)+$',   re.IGNORECASE).match)
-    __EM_NAME   = re.compile(r'^_*?(\w+)',     re.IGNORECASE).match
-    __OBS_NAME  = re.compile(r'^_*?on_*?(\w+)', re.IGNORECASE).match
+    emitpolicy: ClassVar[Type]    = EmitPolicy
+    __SIMPLE:   ClassVar[Pattern] = re.compile(r'^(\w|\.)+$',   re.IGNORECASE)
 
     def __init__(self, **kwargs):
         self._handlers: _HANDLERS = kwargs.get('handlers', dict())
+        self._calldepth           = [0]
+
+    def linkdepths(self, ctrl):
+        "links multiple controllers to the same call depths"
+        self._calldepth = getattr(ctrl, '_calldepth')
+
+    @staticmethod
+    def hashwith(*args):
+        "wraps a function in a HashFunc"
+        return HashFunc.hashwith(*args)
 
     def remove(self, *args):
         "removes an event"
-        if all(isfunction(i) for i in args):
+        if all(HashFunc.observable(i) for i in args):
             for arg in args:
-                fcn  = arg.func if isinstance(arg, partial) else arg
-                name = self.__OBS_NAME(fcn.__name__).group(1)
+                name = HashFunc.eventname(arg)
+                assert name
                 itm  = self._handlers.get(name, None)
                 if isinstance(itm, Set):
-                    tmp  = {arg, fcn}
+                    tmp  = {arg,  HashFunc.callable(arg)}
                     itm -= {i for i in itm if i in tmp or getattr(i, 'func', None) in tmp}
             return
 
@@ -125,7 +242,7 @@ class Event:
         assert isinstance(name, str)
         itm  = self._handlers.get(name, None)
         if isinstance(itm, Set):
-            tmp  = set(args[1:]) | set(i.func if isinstance(i, partial) else i for i in args[1:])
+            tmp  = set(args[1:]) | set(HashFunc.callable(i) for i in args[1:])
             itm -= {i for i in itm if i in tmp or getattr(i, 'func', None) in tmp}
 
     def getobservers(self, lst:Union[str,Set[str]]) -> Set[Callable]:
@@ -133,36 +250,42 @@ class Event:
         if isinstance(lst, str):
             lst = {lst}
 
-        allfcns = set() # type: Set[Callable]
+        allfcns: Set[Callable] = set()
         for name in lst.intersection(self._handlers):
             allfcns.update(self._handlers[name])
 
         completions = self._handlers.get('ㄡ', None)
         if completions:
             for fcn, names in cast(_COMPLETIONS, completions).items():
-                if any(patt(key) for patt, key in product(names, lst)): # type: ignore
+                if any(patt.match(key) for patt, key in product(names, lst)):  # type: ignore
                     allfcns.add(fcn)
         return allfcns
 
-    def handle(self,
-               lst   :Union[str,Set[str]],
-               policy:Optional[EmitPolicy]                 = None,
-               args  :Optional[Union[Tuple,Sequence,Dict]] = None):
+    def handle(
+            self,
+            lst:    Union[str,Set[str]],
+            policy: Optional[EmitPolicy]                 = None,
+            args:   Optional[Union[Tuple,Sequence,Dict]] = None
+    ):
         "Call handlers only once: collect them all"
         allfcns = self.getobservers(lst)
         if len(allfcns):
             _CNT[0] += 1
             policy = EmitPolicy.get(cast(EmitPolicy, policy), args)
             LOGS.debug("[%d] Handling %s (%s)", _CNT[0], lst, self)
-            policy.run(allfcns, args)
+            try:
+                self._calldepth[0] += 1
+                policy.run(allfcns, self._calldepth[0], args)
+            finally:
+                self._calldepth[0] -= 1
             LOGS.debug("[%d] Handled %s (%s)", _CNT[0], lst, self)
         return args
 
     def __call__(
             self,
-            lst:Union[str,Set[str]],
-            policy:Optional[EmitPolicy]                 = None,
-            args  :Optional[Union[Tuple,Sequence,Dict]] = None
+            lst:    Union[str,Set[str]],
+            policy: Optional[EmitPolicy]                 = None,
+            args:   Optional[Union[Tuple,Sequence,Dict]] = None
     ):
         return EventHandlerContext(self, lst, policy, args)
 
@@ -184,7 +307,13 @@ class Event:
 
         return cls.__return(names, _wrapper)
 
-    def observe(self, *anames, decorate = None, argstest = None, **kwargs):
+    def observe(  # pylint: disable=too-many-arguments
+            self,
+            *anames,
+            decorate: Optional[Callable[[Callable], Callable]] = None,
+            argstest: Optional[Callable[..., bool]]            = None,
+            **kwargs: Callable
+    ):
         """
         Wrapped method will handle events named in arguments.
 
@@ -209,16 +338,16 @@ class Event:
             pass
         ```
         """
-        # Not implemented: could be done by decorating / metaclassing
-        # the observer class
-        add = lambda x, y: self.__add_func(x, y, decorate = decorate, test = argstest)
+        add = partial(
+            self.__add_func,
+            decorate = decorate,
+            test     = argstest
+        )
 
         def _fromfcn(fcn:Callable, name = None):
-            if name is None:
-                name  = (fcn.func if isinstance(fcn, partial) else fcn).__name__
-            match = self.__OBS_NAME(name)
-
-            return add((name,), fcn) if match is None else add((match.group(1),), fcn)
+            name = name if name else HashFunc.eventname(fcn)
+            assert name
+            return add((name,), fcn)
 
         if len(anames) == 1:
             if hasattr(anames[0], 'items'):
@@ -243,7 +372,7 @@ class Event:
                 return add(names, fcn)
             return _wrapper
 
-        if all(isfunction(name) for name in names):
+        if all(HashFunc.observable(name) for name in names):
             # dealing with tuples and lists
             for val in names[:-1]:
                 _fromfcn(val)
@@ -263,7 +392,7 @@ class Event:
             assert self in self._hdls[self._name]
             self._hdls[self._name].discard(self)
             fcn = self._fcn
-            self.__dict__.clear() # make sure the function cannot be called again
+            self.__dict__.clear()  # make sure the function cannot be called again
             return fcn(*args, **kwa)
 
     def oneshot(self, name: str, fcn):
@@ -281,12 +410,10 @@ class Event:
         self._handlers = dict()
 
     @classmethod
-    def __emit_list(cls, names, fcn = None) -> frozenset:
+    def __emit_list(cls, names, fcn = None) -> FrozenSet[str]:
         "creates a list of emissions"
         if len(names) == 0 or names[0] is fcn:
-            fname = (fcn.func if isinstance(fcn, partial) else fcn).__name__
-            tmp   = (getattr(cls.__EM_NAME(fname), 'group')(1),)
-            return frozenset(name.lower().strip() for name in tmp)
+            names = (HashFunc.emissionname(fcn),)
 
         return frozenset(name.lower().strip() for name in names)
 
@@ -348,13 +475,20 @@ class Event:
             return this.handle(*cls.__handle_args(lst, myrt, ret, args, kwargs))
         return _wrap
 
-    def __add_func(self, lst, fcn:Callable, decorate = None, test = None):
+    def __add_func(  # pylint: disable=too-many-arguments
+            self,
+            lst:       Iterable[str],
+            fcn:       _OBSERVERS,
+            decorate:  Optional[Callable[[_OBSERVERS], Callable]] = None,
+            test:      Optional[Callable[..., bool]]              = None,
+    ):
         if isinstance(fcn, cast(type, staticmethod)):
             fcn = getattr(fcn, '__func__')
 
         elif ismethod(fcn):
-            raise NotImplementedError("observe cannot decorate a "
-                                      "method unless it's a static one")
+            raise NotImplementedError(
+                "observe cannot decorate a method unless it's a static one"
+            )
 
         elif not callable(fcn):
             raise ValueError("observer must be callable")
@@ -363,18 +497,21 @@ class Event:
             fcn = decorate(fcn)
 
         if test is not None:
-            @wraps(fcn)
+            @wraps(HashFunc.callable(fcn))
             def _fcn(*args, __fcn__ = fcn, __test__ = test, **kwargs):
                 return __fcn__(*args, **kwargs) if __test__(*args, **kwargs) else None
+
             fcn = _fcn
 
         for name in lst:
-            if self.__SIMPLE(name):
+            if self.__SIMPLE.match(name):
                 cur = self._handlers.setdefault(name.lower().strip(), set())
                 cast(Set, cur).add(fcn)
             else:
                 dcur = self._handlers.setdefault('ㄡ', {})
-                cast(_COMPLETIONS, dcur).setdefault(fcn, set()).add(re.compile(name).match)
+                cast(_COMPLETIONS, dcur).setdefault(
+                    cast(Callable, fcn), set()
+                ).add(re.compile(name))
 
         return fcn
 
@@ -383,12 +520,13 @@ def _compare(cur, val):
         return False
     try:
         return cur == val
-    except Exception: #  pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except
         return pickle.dumps(cur) == pickle.dumps(val)
     return False
 
 class Controller(Event):
     "Main controller class"
+
     @classmethod
     def emit(cls, *names, returns = EmitPolicy.annotations):
         "decorator for emitting signals: can only be applied to *Controller* classes"

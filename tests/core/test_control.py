@@ -46,25 +46,36 @@ def test_evt():
     class _Obs:
         @staticmethod
         @events.observe
-        def onevent1(*args, calllater = None, **kwargs):
+        def onevent1(*args, **kwargs):
+            assert kwargs.pop('calllater') == []
+            assert kwargs.pop('calldepth') == 1
             assert (args, kwargs) == hdls[-1]
 
         @events.observe
         @staticmethod
-        def onevent2(calllater = None, **kwargs):
+        def onevent2(**kwargs):
+            assert kwargs.pop('calllater') == []
+            assert kwargs.pop('calldepth') == 1
             assert kwargs == dict(name = 'e2')
 
         @events.observe('event3')
         @staticmethod
-        def onevent3(arg, calllater = None):
+        def onevent3(arg, **kwargs):
+            assert kwargs.pop('calllater') == []
+            assert kwargs.pop('calldepth') == 1
+            assert not kwargs
             assert arg == 'e3'
 
     got = []
-    def _got(*args, calllater = None, **kwargs):
+    def _got(*args, **kwargs):
+        assert kwargs.pop('calllater') == []
+        assert kwargs.pop('calldepth') == 1
         got.append((args, kwargs))
     events.observe('event4', 'event6', _got)
 
-    def onevent5(*args, calllater = None, **kwargs):
+    def onevent5(*args, **kwargs):
+        assert kwargs.pop('calllater') == []
+        assert kwargs.pop('calldepth') == 1
         assert (args, kwargs) == hdls[-1]
 
     events.observe(onevent5)
@@ -84,6 +95,102 @@ def test_evt():
 
     event5(1,2,3, tt = 2)
     assert got == [(tuple(), dict()),hdls[-1]]
+
+def test_evt_calldepth():
+    "test event stuff"
+    # pylint: disable=no-self-use,missing-docstring
+    events = Event()
+
+    calls  = []
+    laters = set()
+    done   = []
+
+    @events.emit
+    def event1() -> dict:
+        calls.append("e1")
+        return dict(name = 'e2')
+
+    @events.emit
+    def event2() -> dict:
+        calls.append("e2")
+        return dict(name = 'e2')
+
+    # pylint: disable=unused-argument, unused-variable
+    @events.observe
+    def onevent1(calllater = None, calldepth = None, **kwargs):
+        assert calldepth == 1
+        cur = ('e1', len(calllater))
+        calllater.append(lambda: laters.add(cur))
+        done.append("e1")
+        event2()
+
+    @events.observe
+    def onevent2(calllater = None, calldepth = None, **kwargs):
+        assert calldepth == 2
+        assert calllater == []
+        cur = ('e2', len(calllater))
+        calllater.append(lambda: laters.add(cur))
+        done.append("e2")
+
+    @events.observe
+    def _onevent1(calllater = None, calldepth = None, **kwargs):
+        assert calldepth == 1
+        cur = ('e1', len(calllater))
+        calllater.append(lambda: laters.add(cur))
+        done.append("e1")
+        event2()
+
+    event1()
+
+    assert done == ['e1', 'e2', 'e1', 'e2']   # checks whether the calldepths can go back down
+    assert calls == ['e1', 'e2', 'e2']
+    assert laters == {('e1', 0), ('e1', 1), ('e2', 0)}
+
+def test_evt_hashfunc():
+    "test event stuff"
+    # pylint: disable=no-self-use,missing-docstring
+    events = Event()
+
+    done   = []
+
+    @events.emit
+    def event1() -> dict:
+        return dict()
+
+    class _A:
+        pass
+
+    obj1 = _A()
+    obj2 = _A()
+
+    # pylint: disable=unused-argument, unused-variable
+    def _add1():
+
+        @events.observe
+        @events.hashwith(obj1)
+        def onevent1(**_):
+            done.append("e1")
+
+        @events.observe
+        def _onevent1(**_):
+            done.append("e2")
+
+        @events.observe("event1")
+        @events.hashwith(obj2)
+        @events.observe("event1")
+        @events.hashwith(obj1)
+        def _onevent1_(**_):
+            done.append("e3")
+
+    _add1()
+    _add1()
+    _add1()
+
+    event1()
+
+    assert done.count("e1") == 1
+    assert done.count("e2") == 3
+    assert done.count("e3") == 2
 
 def test_evt_observewithdict():
     "test event stuff"
@@ -240,5 +347,6 @@ def test_decentralized():
     _test(Toto())
     _test(Tata(aval = 2, bval = ""))
 
+
 if __name__ == '__main__':
-    test_evt()
+    test_evt_calldepth()

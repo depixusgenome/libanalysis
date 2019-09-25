@@ -6,7 +6,7 @@ from  functools         import partial
 from  collections       import ChainMap
 from  contextlib        import contextmanager
 from  copy              import deepcopy, copy
-from  typing            import Dict, Any, TypeVar
+from  typing            import Dict, Any, TypeVar, Iterator, Union
 
 import numpy            as     np
 import pandas           as     pd
@@ -45,7 +45,7 @@ def _good(model, i, j):
     try:
         return obj != j
     except ValueError:
-        return True # numpy error
+        return True  # numpy error
 
 def updatemodel(self, model, kwa, force = False, deflt = None):
     "update the model"
@@ -93,6 +93,7 @@ def updatedict(self, model, kwa, force = False):
 class Indirection:
     "descriptor for accessing a given model"
     __slots__ = ('_ctrl', '_attr')
+
     def __init__(self):
         self._ctrl: str = ""
         self._attr: str = ""
@@ -131,7 +132,10 @@ class Indirection:
             inst.__dict__[self._attr] = value.name
             self.controller(getattr(inst, '_ctrl')).add(value, noerase = False)
 
+
 ObjType = TypeVar("ObjType")
+
+
 class DecentralizedController(Controller):
     """
     Controller to which can be added anything
@@ -151,6 +155,12 @@ class DecentralizedController(Controller):
 
         name = getattr(obj, 'name', None)
         return name if name else type(obj).__name__
+
+    def swapmodels(self, obj: ObjType, *others: ObjType) -> Union[ObjType, Iterator[ObjType]]:
+        "add a model to be updated & observed through this controller"
+        if not others:
+            return self.add(obj, False)
+        return (self.add(i, False) for i in (obj,)+others)
 
     def add(self, obj: ObjType, noerase = True) -> ObjType:
         "add a model to be updated & observed through this controller"
@@ -239,13 +249,21 @@ class DecentralizedController(Controller):
 
         obj = self._objects[name]
         if isdict:
-            fcn = lambda x: obj.get(x, DELETE), lambda x: dflt.get(x, DELETE)
+            kwa  = dict(
+                {
+                    i: dflt.get(i, DELETE)
+                    for i, j in out['old'].items()
+                    if j == obj.get(i, DELETE)
+                },
+                ** dict.fromkeys(out.get('deleted', ()), DELETE)
+            )
         else:
-            fcn = (lambda x: getattr(obj, x)), (lambda x: getattr(dflt, x))
+            kwa  = {
+                i: getattr(dflt, i)
+                for i, j in out['old'].items()
+                if j == getattr(obj, i)
+            }
 
-        kwa  = {i: fcn[1](i) for i, j in out['old'].items() if j == fcn[0](i)}
-        if isdict:
-            kwa.update(dict.fromkeys(out.get('deleted', ()), DELETE))
         kwa.update(out.get('new', ()))
         self.__update('_objects', name, kwa)
         return out
@@ -291,18 +309,35 @@ class DecentralizedController(Controller):
         ctrl.add(mdl)
         ctrl.observe(mdl, lambda **_: None)
         """
-        objs   = self._objects.values()
-        anames = tuple((self.name+self._objname(i)) if any(i is j for j in objs) else i
-                       for i in anames)
+        objs   = {id(i) for i in self._objects.values()}
+
+        def _tonames(val):
+            if isinstance(val, str):
+                return val
+
+            if id(val) in objs:
+                return self.name+self._objname(val)
+
+            if isinstance(val, (tuple, list)):
+                return tuple(_tonames(i) for i in val)
+
+            if isinstance(val, dict):
+                return {_tonames(i): j for i, j in val.items()}
+
+            if not callable(val):
+                raise KeyError(f"Could parse argument: {val}\nMissing model ?")
+            return val
+
+        anames = tuple(_tonames(i) for i in anames)
         return super().observe(*anames, decorate = decorate, argstest = argstest, **kwargs)
 
     @property
-    def current(self)-> Dict[str, Dict]:
+    def current(self) -> Dict[str, Dict]:
         "return a dict containing all objects info"
         return self.__get(self._objects)
 
     @property
-    def defaults(self)-> Dict[str, Dict[str, Any]]:
+    def defaults(self) -> Dict[str, Dict[str, Any]]:
         "return a dict containing all objects info"
         return self.__get(self._defaults)
 
@@ -333,10 +368,9 @@ class DecentralizedController(Controller):
         return out
 
     @staticmethod
-    def __get(dico)-> Dict[str, Dict[str, Any]]:
+    def __get(dico) -> Dict[str, Dict[str, Any]]:
         "return a dict containing all objects info"
-        get = lambda i: dict(i if isinstance(i, dict) else i.__dict__)
-        out = {i: get(j) for i, j in dico.items()}
+        out = {i:  dict(j if isinstance(j, dict) else j.__dict__) for i, j in dico.items()}
         for i in out.values():
             i.pop("name", None)
         return out

@@ -14,6 +14,13 @@ class ConfigObject:
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
+    def __init_subclass__(cls, hashattributes = (), **_):
+        if hashattributes:
+            def __hash__(self):
+                return hash((self.__class__, *(getattr(self, i, '?') for i in hashattributes)))
+            cls.__hash__ = __hash__
+        return super().__init_subclass__(**_)
+
     def diff(self, other) -> Dict[str, Any]:
         "return the diff with `other`"
         return diffobj(self, other)
