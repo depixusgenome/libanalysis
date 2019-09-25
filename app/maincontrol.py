@@ -156,6 +156,11 @@ class BaseSuperController:
         self.theme   = ThemeController()
         self.theme.add(MainTheme())
         self.display = DisplayController()
+
+        for i, j in self.__dict__.items():
+            if i != 'theme' and callable(getattr(j, 'linkdepths', None)):
+                j.linkdepths(self.theme)
+
         self._config_counts = [False]
 
     emitpolicy = EmitPolicy
@@ -222,6 +227,8 @@ class BaseSuperController:
             with _test("Could not create GUI instance"):
                 keys         = DpxKeyEvent(self)
                 self.topview = viewcls(self, **kwa)
+                for i in self.topview.views:
+                    getattr(i, 'swapmodels', lambda *_: None)(self)
                 if len(self.topview.views) and hasattr(self.topview.views[0], 'ismain'):
                     self.topview.views[0].ismain(self)
 

@@ -20,10 +20,11 @@ class PlotState(Enum):
 class PlotAttrs:
     "Plot Attributes for one variable"
     _GLYPHS = {
-        '-' : 'line',    'o': 'circle', '△': 'triangle',
-        '◇' : 'diamond', '□': 'square', '┸': 'quad',
-        '+' : 'cross'
+        '-': 'line',    'o': 'circle', '△': 'triangle',
+        '◇': 'diamond', '□': 'square', '┸': 'quad',
+        '+': 'cross'
     }
+
     def __init__(self,
                  color   = '~blue',
                  glyph   = 'line',
@@ -42,7 +43,7 @@ class PlotAttrs:
 
 def defaultfigsize(*args) -> Tuple[int, int, str]:
     "return the default fig size"
-    return args+(700, 600, 'stretch_both')[len(args):] # type: ignore
+    return args+(700, 600, 'stretch_both')[len(args):]  # type: ignore
 
 class PlotTheme:
     """
@@ -97,7 +98,8 @@ class PlotModel:
     theme:   PlotTheme   = PlotTheme()
     display: PlotDisplay = PlotDisplay()
     config:  Any         = None
-    def __init__(self):
+
+    def __init__(self, **_):
         self.theme   = deepcopy(self.theme)
         self.display = deepcopy(self.display)
         self.config  = deepcopy(self.config)
@@ -107,20 +109,17 @@ class PlotModel:
             assert self.config.name, self
             assert self.config.name != self.theme.name, self
 
-    def addto(self, ctrl, noerase = True):
+    def swapmodels(self, ctrl):
         "sets-up model observers"
-        self.theme   = ctrl.theme  .add(self.theme, noerase)
-        self.display = ctrl.display.add(self.display, noerase)
+        self.theme   = ctrl.theme.swapmodels(self.theme)
+        self.display = ctrl.display.swapmodels(self.display)
         if self.config:
-            self.config = ctrl.theme  .add(self.config, noerase)
+            self.config = ctrl.theme.swapmodels(self.config)
 
-    def observe(self, ctrl, noerase = False):
+    def observe(self, ctrl):
         "sets-up model observers"
-        self.addto(ctrl, noerase)
 
-    @classmethod
-    def create(cls, ctrl, noerase = True):
-        "creates the model and registers it"
-        self = cls()
-        self.addto(ctrl, noerase = noerase)
-        return self
+    def addto(self, ctrl):
+        "sets-up model observers"
+        self.swapmodels(ctrl)
+        self.observe(ctrl)

@@ -26,7 +26,7 @@ class UndoController(Controller):
     def appendundos(self, lst) -> dict:
         'Adds to the undos'
         if len(lst):
-            self.__model.append(self.__isundoing, lst)
+            self.__model.append(self.__isundoing, lst[::-1])
             self.__isundoing = False
             return dict(items = lst)
         raise NoEmission("empty undo list")

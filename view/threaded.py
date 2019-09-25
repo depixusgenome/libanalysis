@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Basics for threading displays"
-from    abc                 import abstractmethod, ABC
+from    abc                 import abstractmethod
 from    collections         import OrderedDict
 from    contextlib          import contextmanager
 from    enum                import Enum
@@ -18,6 +18,10 @@ from    .plots              import PlotAttrsView
 from    .base               import threadmethod, spawn, SINGLE_THREAD
 
 LOGS    = getLogger(__name__)
+MODEL   = TypeVar('MODEL', bound = 'DisplayModel')
+DISPLAY = TypeVar("DISPLAY")
+THEME   = TypeVar("THEME")
+
 
 class DisplayState(Enum):
     "plot state"
@@ -27,22 +31,7 @@ class DisplayState(Enum):
     disabled     = 'disabled'
     outofdate    = 'outofdate'
 
-
-class BaseModel(ABC):
-    "basic display model"
-    def reset(self, _):
-        "resets the model"
-
-    def clear(self):
-        "clear the model"
-
-
-MODEL   = TypeVar('MODEL', bound = BaseModel)
-DISPLAY = TypeVar("DISPLAY")
-THEME   = TypeVar("THEME")
-
-
-class DisplayModel(Generic[DISPLAY, THEME], BaseModel):
+class DisplayModel(Generic[DISPLAY, THEME]):
     "Basic model for time series"
     display: DISPLAY
     theme:   THEME
@@ -58,18 +47,27 @@ class DisplayModel(Generic[DISPLAY, THEME], BaseModel):
         self.display = _create(0)
         self.theme   = _create(1)
 
-    def observe(self, ctrl) -> bool:
-        """
-        observe the controller
-        """
-        if self.theme in ctrl.theme:
-            return True
+    def swapmodels(self, ctrl):
+        "add the models to the controllers"
         if hasattr(self.theme, 'name'):
-            ctrl.theme.add(self.theme)
+            ctrl.theme.swapmodels(self.theme)
         if hasattr(self.display, 'name'):
-            ctrl.display.add(self.display)
-        return False
+            ctrl.display.swapmodels(self.display)
 
+        for i in self.__dict__.values():
+            if callable(getattr(i, 'swapmodels', None)):
+                i.swapmodels(ctrl)
+
+    def observe(self, ctrl):
+        "observes the model"
+        for i in self.__dict__.values():
+            if callable(getattr(i, 'observe', None)):
+                i.observe(ctrl)
+
+    def addto(self, ctrl):
+        "swaps models & observes the controller"
+        self.swapmodels(ctrl)
+        self.observe(ctrl)
 
 class _OrderedDict(OrderedDict):
     def __missing__(self, key):
@@ -77,15 +75,21 @@ class _OrderedDict(OrderedDict):
         self[key]   = value
         return value
 
-
 class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-methods
     "Base plotter class"
+    _doc: Document
+
     def __init__(self, model: MODEL = None, **kwa) -> None:
         "sets up this plotter's info"
         super().__init__()
-        self._model: MODEL   = _tattr(self, 0)(**kwa) if model is None else model
-        self._doc:  Document = None
-        self._state           = DisplayState.active
+        self._model: MODEL = _tattr(self, 0)(**kwa) if model is None else model
+        self._state        = DisplayState.active
+
+    def swapmodels(self, ctrl):
+        "swap models with those in the controller"
+        for i in self.__dict__.values():
+            if callable(getattr(i, 'swapmodels', None)):
+                i.swapmodels(ctrl)
 
     def action(self, ctrl, fcn = None):
         "decorator which starts a user action but only if state is set to active"
@@ -149,11 +153,8 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
         if val and (old is DisplayState.outofdate):
             self.__doreset(ctrl, now)
 
-    def reset(self, ctrl, clear = False, now = False):
+    def reset(self, ctrl, now = False):
         "Updates the data"
-        if clear is True:
-            self._model.clear()
-
         state = self._state
         if   state is DisplayState.disabled:
             self._state = DisplayState.outofdate
@@ -162,8 +163,7 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             self.__doreset(ctrl, now)
 
         elif state is DisplayState.abouttoreset:
-            with self.resetting():
-                self._model.reset(ctrl)
+            self.__reset(ctrl, False)
 
     @staticmethod
     def attrs(attrs:PlotAttrs) -> PlotAttrsView:
@@ -176,22 +176,17 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
 
         def __doreset(self, ctrl, _):
             start = time()
-            with self.resetting() as cache:
-                self._model.reset(ctrl)
-                self._reset(ctrl, cache)
+            self.__reset(ctrl, True)
             LOGS.debug("%s.reset done in %.3f", type(self).__qualname__, time() - start)
     else:
         def __doreset(self, ctrl, _):
             if _:
                 start = time()
-                with self.resetting() as cache:
-                    self._model.reset(ctrl)
-                    self._reset(ctrl, cache)
+                self.__reset(ctrl, True)
                 LOGS.debug("%s.reset done in %.3f", type(self).__qualname__, time() - start)
                 return
 
-            with self.resetting():
-                self._model.reset(ctrl)
+            self.__reset(ctrl, False)
 
             old, self._state = self._state, DisplayState.abouttoreset
             spawn(self._reset_and_render, ctrl, old)
@@ -237,6 +232,17 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             self._state = DisplayState.outofdate
             return True
         return self._state != DisplayState.active
+
+    def __reset(self, ctrl, ctx: bool):
+        mdl = getattr(self._model, 'reset', None)
+        if not (mdl or ctx):
+            return
+
+        with self.resetting() as cache:
+            if mdl:
+                mdl(ctrl)
+            if ctx:
+                self._reset(ctrl, cache)
 
     @abstractmethod
     def _addtodoc(self, ctrl, doc):

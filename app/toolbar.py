@@ -34,6 +34,12 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
         ctrl.theme.update("theme", tabheight = height)
         self._mainview  = templateattribute(self, 1)(ctrl = ctrl, **kwa)
 
+    def swapmodels(self, ctrl):
+        "swap models with those in the controller"
+        for i in (self._bar, self._mainview):
+            if callable(getattr(i, 'swapmodels', None)):
+                i.swapmodels(ctrl)
+
     def ismain(self, ctrl):
         "sets-up the main view as main"
         getattr(self._mainview, 'ismain', lambda _: None)(ctrl)

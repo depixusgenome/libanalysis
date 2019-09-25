@@ -71,7 +71,7 @@ class ControlModel(ABC):
         "return the current theme name"
 
     @abstractmethod
-    def addto(self, ctrl, noerase = False):
+    def swapmodels(self, ctrl):
         "adds the model to the controller"
 
     @abstractmethod
@@ -86,8 +86,10 @@ class ControlModel(ABC):
     def reset(self):
         "resets the model's view"
 
+
 PlotModelType    = TypeVar('PlotModelType',    bound = PlotModel)
-ControlModelType = TypeVar('ControlModelType',    bound = ControlModel)
+ControlModelType = TypeVar('ControlModelType', bound = ControlModel)
+
 
 class _StateDescriptor:
     @staticmethod
@@ -146,6 +148,7 @@ class GroupStateDescriptor:
 class _ModelDescriptor:
     _name: str
     _ctrl: str
+
     def __set_name__(self, _, name):
         self._name = name[1:]
         self._ctrl = 'display' if name.endswith('display') else 'theme'
@@ -181,7 +184,7 @@ class _ModelDescriptor:
 
 class PlotAttrsView(PlotAttrs):
     "implements PlotAttrs"
-    def __init__(self, attrs:PlotAttrs)->None:
+    def __init__(self, attrs:PlotAttrs)  -> None:
         super().__init__(**attrs.__dict__)
 
     def listpalette(self, count, indexes = None, theme = None) -> List[str]:
@@ -193,7 +196,7 @@ class PlotAttrsView(PlotAttrs):
         else:
             palette = getattr(bokeh.palettes, self.palette, None)
         if palette is None:
-            return [self.color]*count # type: ignore
+            return [self.color]*count  # type: ignore
         if isinstance(palette, dict):
             colors: List[str] = max(palette.values(), key = len)
             npal   = len(colors)
@@ -311,7 +314,7 @@ class PlotAttrsView(PlotAttrs):
 
 class PlotThemeView(PlotTheme):
     "implements PlotTheme"
-    def __init__(self, attrs:PlotTheme)->None:
+    def __init__(self, attrs:PlotTheme) -> None:
         super().__init__(**attrs.__dict__)
 
     def figargs(self, **kwa) -> Dict[str, Any]:
@@ -366,6 +369,7 @@ class PlotUpdater(list):
         for axis in 'x_range_name', 'y_range_name':
             if axis in args:
                 cache[view][axis] = args.pop(axis)
+
     @staticmethod
     def __split(nsel, args):
         tmp = {}
@@ -506,12 +510,12 @@ class AxisOberver:
         curr  = getattr(self._get(None), f'{axis}bounds', (None, None))
         return dict(max_interval = rng*(1.+theme.boundsovershoot),
                     min_interval = rng*theme.overshoot,
-                    start        = vmin if curr[0]  is None else curr[0], # type: ignore
+                    start        = vmin if curr[0]  is None else curr[0],  # type: ignore
                     end          = vmax if curr[1]  is None else curr[1],
                     reset_start  = vmin,
                     reset_end    = vmax)
 
-    def setbounds(self, cache:CACHE_TYPE, fig, # pylint: disable=too-many-arguments
+    def setbounds(self, cache:CACHE_TYPE, fig,  # pylint: disable=too-many-arguments
                   xarr, yarr, xinit = None, yinit = None):
         "Sets the range boundaries"
         if xarr is not None:
@@ -562,9 +566,9 @@ class AxisOberver:
         def _set(name):
             axis = getattr(self._fig, name+'_range')
             if isinstance(axis, Range1d):
-                fcn  = lambda attr, old, new: self._onchangeaxis(name)
+                fcn  = lambda attr, old, new: self._onchangeaxis(name)  # noqa
             elif isinstance(axis, DataRange1d):
-                fcn  = lambda attr, old, new: self._onchangedataaxis(name)
+                fcn  = lambda attr, old, new: self._onchangedataaxis(name)  # noqa
             else:
                 return
             axis.on_change('start', fcn)
@@ -579,7 +583,9 @@ class _OrderedDict(OrderedDict):
         self[key]   = value
         return value
 
-class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=too-many-public-methods
+class PlotCreator(   # pylint: disable=too-many-public-methods
+        Generic[ControlModelType, PlotModelType]
+):
     "Base plotter class"
     _LOCK    = RLock()
     _RESET   = frozenset(('bead',))
@@ -588,12 +594,11 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
     _theme   = cast(PlotTheme,   _ModelDescriptor())
     _display = cast(PlotDisplay, _ModelDescriptor())
     _config  = cast(Any,         _ModelDescriptor())
-    _doc      : Document
-    _model    : ControlModelType
+    _doc:       Document
+    _model:     ControlModelType
     _plotmodel: Optional[PlotModelType]
+
     def __init__(self, ctrl,        # pylint: disable=too-many-arguments
-                 addto     = True,
-                 noerase   = True,
                  model     = None,
                  plotmodel = None, **kwa) -> None:
         "sets up this plotter's info"
@@ -603,16 +608,17 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
 
         self._updater   = PlotUpdater()
         self._ctrl      = ctrl
-        self._model     = _cls(0, ctrl)  if model     is None else model
+        self._model     = _cls(0)        if model     is None else model
         self._plotmodel = _cls(1, **kwa) if plotmodel is None else plotmodel
 
-        if addto:
-            self.addto(ctrl, noerase = noerase)
-
-    def observe(self, ctrl, noerase = False):
+    def observe(self, ctrl):
         "sets-up model observers"
-        if self._plotmodel:
-            self._plotmodel.observe(ctrl, noerase)
+        if callable(getattr(self._plotmodel, 'observe', None)):
+            self._plotmodel.observe(ctrl)
+
+        if callable(getattr(self._model, 'observe', None)):
+            self._model.observe(ctrl)
+
         @ctrl.theme.observe
         def _onmain(old=None, **_):
             if 'themename' in old:
@@ -673,12 +679,12 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
             for i, j in name:
                 PlotAttrsView(getattr(self._theme, i)).setcolor(j, **attrs)
 
-    def addto(self, ctrl, noerase = True):
+    def addto(self, ctrl):
         "adds the models to the controller"
-        if self._plotmodel:
-            self._plotmodel.addto(ctrl, noerase = noerase)
-        if self._model:
-            self._model.addto(ctrl, noerase = noerase)
+        if callable(getattr(self._plotmodel, 'addto', None)):
+            self._plotmodel.addto(ctrl)
+        if callable(getattr(self._model, 'addto', None)):
+            self._model.addto(ctrl)
 
     def defaultsizingmode(self, kwa = None, **kwargs):
         "the default sizing mode"
@@ -706,6 +712,7 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
             raise ValueError()
 
         done = [False]
+
         def _observer(**_):
             if self.isactive() and not done[0]:
                 done[0] = True
@@ -794,7 +801,7 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
     def reset(self, items:bool):
         "Updates the data"
         assert items in (True, False, None)
-        if items:
+        if items and hasattr(self._model, 'clear'):
             self._model.clear()
 
         state = self.state
@@ -844,8 +851,8 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
         if SINGLE_THREAD:
             LOGS.info("Running in single-thread mode")
             try:
-                args : tuple = (self._ctrl, _OrderedDict(), self._statehash())
-                delay        = self.__cache_compute(old, fcn, *args)
+                args: tuple = (self._ctrl, _OrderedDict(), self._statehash())
+                delay       = self.__cache_compute(old, fcn, *args)
                 self.__cache_render(delay, *args)
             finally:
                 self.state = old
@@ -853,8 +860,8 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
             spawn(self.__cached_reset, ctrl, old, fcn)
 
     async def __cached_reset(self,  ctrl, old, fcn):
-        args : tuple = (ctrl, _OrderedDict(), self._statehash())
-        delay        = await threadmethod(self.__cache_compute, old, fcn, *args)
+        args: tuple = (ctrl, _OrderedDict(), self._statehash())
+        delay       = await threadmethod(self.__cache_compute, old, fcn, *args)
         self.calllater(partial(self.__cache_render, delay, *args))
 
     def __doreset(self, ctrl):
@@ -875,7 +882,7 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
                     else:
                         self._reset(cache)
                         self._updater.reset(self._theme, self._model.themename, cache)
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:   # pylint: disable=broad-except
                 if self._statehash() == identity:
                     args = getattr(exc, 'args', tuple())
                     if len(args) == 2 and args[1] == "warning":
@@ -898,25 +905,29 @@ class PlotCreator(Generic[ControlModelType, PlotModelType]): # pylint: disable=t
         LOGS.debug("%s.reset done in %.3f+%.3f",
                    type(self).__qualname__, delay, clock() - start)
 
+
 PlotType = TypeVar('PlotType', bound = PlotCreator)
+
+
 class PlotView(Generic[PlotType], BokehView):
     "plot view"
     def __init__(self, ctrl = None, **kwa):
         super().__init__(ctrl, **kwa)
 
         def _gesture(name, meta):
-            return {name+'rate'    : .8 if name == 'zoom' else .2,
+            return {name+'rate':     .8 if name == 'zoom' else .2,
                     name+'activate': meta[:-1],
-                    name+'xlow'    : meta+'ArrowLeft',
-                    name+'xhigh'   : meta+'ArrowRight',
-                    name+'ylow'    : meta+'ArrowDown',
-                    name+'yhigh'   : meta+'ArrowUp'}
+                    name+'xlow':     meta+'ArrowLeft',
+                    name+'xhigh':    meta+'ArrowRight',
+                    name+'ylow':     meta+'ArrowDown',
+                    name+'yhigh':    meta+'ArrowUp'}
 
         ctrl.theme.updatedefaults('keystroke',
                                   reset = 'Shift- ',
                                   **_gesture('pan', 'Alt-'),
                                   **_gesture('zoom', 'Shift-'))
         self._plotter = self.plottype()(ctrl)
+        self._plotter.addto(ctrl)
 
     @classmethod
     def plottype(cls) -> Type[PlotCreator]:
