@@ -6,7 +6,7 @@ from    collections         import OrderedDict
 from    contextlib          import contextmanager
 from    enum                import Enum
 from    time                import time
-from    typing              import TypeVar, Generic
+from    typing              import TypeVar, Generic, Optional, Callable
 
 from    bokeh.document      import Document
 from    bokeh.models        import Model
@@ -17,10 +17,11 @@ from    utils.inspection    import templateattribute as _tattr
 from    .plots              import PlotAttrsView
 from    .base               import threadmethod, spawn, SINGLE_THREAD
 
-LOGS    = getLogger(__name__)
-MODEL   = TypeVar('MODEL', bound = 'DisplayModel')
-DISPLAY = TypeVar("DISPLAY")
-THEME   = TypeVar("THEME")
+LOGS     = getLogger(__name__)
+MODEL    = TypeVar('MODEL', bound = 'DisplayModel')
+DISPLAY  = TypeVar("DISPLAY")
+THEME    = TypeVar("THEME")
+ResetFcn = Optional[Callable[[dict], None]]
 
 
 class DisplayState(Enum):
@@ -189,12 +190,16 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             self.__reset(ctrl, False)
 
             old, self._state = self._state, DisplayState.abouttoreset
-            spawn(self._reset_and_render, ctrl, old)
+            spawn(self._reset_and_render, ctrl, old, None)
 
-        async def _reset_and_render(self, ctrl, old):
+        def _partialreset(self, ctrl, fcn: ResetFcn):
+            old, self._state = self._state, DisplayState.abouttoreset
+            spawn(self._reset_and_render, ctrl, old, fcn)
+
+        async def _reset_and_render(self, ctrl, old, fcn: ResetFcn):
             start = time()
             cache = _OrderedDict()
-            await threadmethod(self._reset_without_render, ctrl, old, cache)
+            await threadmethod(self._reset_without_render, ctrl, old, cache, fcn)
 
             msg = "%s.reset done in %.3f", type(self).__qualname__, time() - start
             if cache:
@@ -203,11 +208,14 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
                 ctrl.display.handle('rendered', args = {'element': self})
                 LOGS.debug(*msg)
 
-        def _reset_without_render(self, ctrl, old, cache):
+        def _reset_without_render(self, ctrl, old, cache, fcn: ResetFcn):
             try:
                 self._state = DisplayState.resetting
                 with ctrl.computation.type(ctrl, calls = self.__doreset):
-                    self._reset(ctrl, cache)
+                    if fcn is None:
+                        self._reset(ctrl, cache)
+                    else:
+                        fcn(cache)
             finally:
                 self._state = old
             return cache
