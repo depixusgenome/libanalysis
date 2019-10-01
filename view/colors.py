@@ -7,6 +7,10 @@ from typing         import (
 from bokeh.colors   import named    as _bkclr
 from bokeh          import palettes as _palette
 
+
+_bkclr.dpxblue = _bkclr.NamedColor("dpxblue", *(int('#6baed6'[i:i+2], 16) for i in (1, 3, 5)))
+
+
 @overload
 def tohex(clr:Dict[Any,str]) -> Dict[Any, str]:
     "return a dictionnary of colors in hex format"
