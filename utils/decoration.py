@@ -86,7 +86,6 @@ def fromstream(streamopts):
 
 @contextmanager
 def _escapenans(*arrays: np.ndarray, reset = True):
-    # pylint: disable=invalid-unary-operand-type
     if len(arrays) == 0:
         yield tuple()
         return
@@ -265,6 +264,7 @@ def addproperty(other, attr = 'display', prop = None, **args):
     """
     def _wrapper(cls):
         if args:
+            # pylint: disable=unnecessary-lambda
             prop = property(lambda self: cls(self, **args), doc = cls.__doc__)
         else:
             prop = property(cls, doc = cls.__doc__)

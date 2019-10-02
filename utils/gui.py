@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# pylint: disable=import-outside-toplevel
 u"gui related utils"
 
 import re

@@ -46,7 +46,6 @@ def _extractfromxlsx(path: Union[str, Path], sheet = 'summary', entry = 'config:
         return None
 
     with closing(load_workbook(path, read_only = True)) as book:
-        # pylint: disable=not-an-iterable
         rows = next((i.rows for i in book if sheet is None or i.title.lower() == sheet),
                     ())
         txt  = next((str(i[j+1].value)  for i in rows for j, k in enumerate(i)

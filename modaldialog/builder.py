@@ -112,7 +112,7 @@ class BodyParser:
         for i in tmp:
             if found and not i:
                 continue
-            elif i.startswith("### "):
+            if i.startswith("### "):
                 found = False
                 elems = cls._SPLIT.split(i)
                 i     = elems[0][4:]+cls._ROWT+"  "+'  '.join(j+cls._COLT for j in elems[1:])
@@ -203,7 +203,7 @@ class BodyParser:
         for i in body:
             if i.startswith(titleflag):
                 continue
-            elif i.startswith(tabflag) and lines:
+            if i.startswith(tabflag) and lines:
                 if lines:
                     tabs.append(cls.__totab(lines, model, default))
                 lines.clear()

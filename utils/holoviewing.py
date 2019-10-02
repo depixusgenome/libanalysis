@@ -191,7 +191,7 @@ def dropdown(options, fcn = None, layout = None, clear_output = True, **kwa):
     if fcn is None:
         return lambda x: dropdown(options, fcn = x, layout = layout, **kwa)
 
-    import ipywidgets as widgets # pylint: disable=import-error
+    import ipywidgets as widgets  # pylint: disable=import-error,import-outside-toplevel
     ddown = widgets.Dropdown(options = options, **kwa)
     out   = widgets.Output(layout = layout if layout else {})
     def _wrapped(value):

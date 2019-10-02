@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# pylint: disable=broad-except
+# pylint: disable=broad-except,import-outside-toplevel
 """
 Used for scripting: something similar to matplotlib's pyplot.
 """

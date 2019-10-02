@@ -110,9 +110,12 @@ class BaseFileDialog:
             if sys.platform.startswith("win"):
                 cls._HAS_ZENITY = False
             else:
-                cls._HAS_ZENITY = _run([b'zenity', b'--version'],
-                                       stderr = DEVNULL,
-                                       stdout = DEVNULL).returncode == 0
+                cls._HAS_ZENITY = _run(
+                    [b'zenity', b'--version'],
+                    stderr = DEVNULL,
+                    stdout = DEVNULL,
+                    check  = False
+                ).returncode == 0
         return cls._HAS_ZENITY
 
     @staticmethod
@@ -137,7 +140,7 @@ class BaseFileDialog:
             lst = (f'{i[0]}(*{i[1]})|*{i[1]}' for i in info.get('filetypes', ()))
             cmd.extend(sum(zip(repeat('--file-filter'), lst), ()))
 
-        out = _run(cmd, stderr = DEVNULL, stdout=PIPE)
+        out = _run(cmd, stderr = DEVNULL, stdout=PIPE, check = False)
         if out.returncode != 0:
             return None
         if info.get('multiple', False):

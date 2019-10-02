@@ -39,7 +39,7 @@ class AppTheme:
     figtbheight: int       = 48
     appname:     str       = ''
 
-@dataclass
+@dataclass  # pylint: disable=too-many-instance-attributes
 class MainTheme:
     """
     main theme
@@ -61,7 +61,7 @@ class MainTheme:
     def __getitem__(self, name):
         out = getattr(self, name, None)
         if out is None:
-            import bokeh.themes as _theme
+            import bokeh.themes as _theme  # pylint: disable=import-outside-toplevel
             if name in ('light', 'dark'):
                 name += '_minimal'
             if hasattr(_theme, '_'+name):

@@ -100,7 +100,7 @@ class LazyShelf(dict):
             value = _DEFAULT, force = False, *args, **kwa):
         "sets and returns the value"
         if value is _DEFAULT:
-            key, value = value.__name__, value
+            key = value.__name__
             if key[0] == '_':
                 key = key[1:]
 
@@ -168,7 +168,7 @@ class LazyShelf(dict):
     def store(self, key, value = _DEFAULT):
         "stores a value"
         if value is _DEFAULT:
-            key, value = value.__name__, value
+            key = value.__name__
             if key[0] == '_':
                 key = key[1:]
 

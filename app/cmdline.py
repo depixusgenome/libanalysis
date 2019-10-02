@@ -75,6 +75,7 @@ def _from_module(view):
     return getattr(viewmod, view[view.rfind('.')+1:])
 
 def _debug(raiseerr, nothreading):
+    # pylint: disable=import-outside-toplevel
     if nothreading:
         import view.base as _base
         _base.SINGLE_THREAD = True
@@ -151,7 +152,7 @@ def _config(lines):
     INITIAL_ORDERS.default_config = _fcn
 
 def _version(softname, ctx, _, value):
-    import version
+    import version  # pylint: disable=import-outside-toplevel
     if not value or ctx.resilient_parsing:
         return
     click.echo(f'{softname} ' + version.version())

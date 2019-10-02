@@ -28,8 +28,8 @@ def _read(stream:TextIO) -> Iterator[Tuple[str,str]]:
             title = line[1:].strip()
             seq   = ''
             continue
-        else:
-            seq += line
+
+        seq += line
 
     if len(seq):
         if first and title is None and getattr(stream, 'name', None) is not None:

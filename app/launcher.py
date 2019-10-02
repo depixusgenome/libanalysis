@@ -92,6 +92,7 @@ class _FunctionHandler(FunctionHandler):
 
     @staticmethod
     def __monkeypatch_bokeh(view):
+        # pylint: disable=import-outside-toplevel
         from bokeh.core.properties import Seq
         def from_json(self, json, models=None, __old__ = Seq.from_json):
             "parse docstring"
@@ -142,7 +143,6 @@ class _FunctionHandler(FunctionHandler):
         if kwa.get('port', None) == 'random':
             while True:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                    # pylint: disable=no-member
                     sock.settimeout(2)
                     kwa['port'] = random.randint(2000, 8000)
                     if sock.connect_ex(("127.0.0.1", kwa['port'])) != 0:
