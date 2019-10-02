@@ -6,16 +6,17 @@ Used for scripting: something similar to matplotlib's pyplot.
 """
 import sys
 import inspect
+from   importlib import import_module
 
-locals().update({i: getattr(__import__('functools'), i)
+locals().update({i: getattr(import_module('functools'), i)
                  for i in ('partial', 'wraps')})
-locals().update({i: getattr(__import__('itertools'), i)
+locals().update({i: getattr(import_module('itertools'), i)
                  for i in ('chain', 'product', 'repeat')},
-                re      = __import__('re'),
-                pickle  = __import__('pickle'),
-                np      = __import__('numpy'),
-                pd      = __import__('pandas'),
-                Path    = __import__('pathlib').Path
+                re      = import_module('re'),
+                pickle  = import_module('pickle'),
+                np      = import_module('numpy'),
+                pd      = import_module('pandas'),
+                Path    = getattr(import_module('pathlib'), 'Path')
                )
 try:
     locals()['plt'] = __import__('matplotlib.pyplot')
