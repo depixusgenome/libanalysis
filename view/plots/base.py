@@ -264,6 +264,9 @@ class PlotAttrsView(PlotAttrs):
         cls._default(args)
         args.pop('size')
 
+    _ellipse  = _rect
+    _oval     = _rect
+
     @staticmethod
     def _image(args):
         color = args.pop('color')
@@ -274,6 +277,8 @@ class PlotAttrsView(PlotAttrs):
     @staticmethod
     def _default(args):
         args.pop('palette')
+        if args.get('color', '-') in ('', None):
+            args.pop('color')
 
     def __args(self, theme, kwa):
         args = dict(self.__dict__)

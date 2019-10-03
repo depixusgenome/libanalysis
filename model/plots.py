@@ -36,10 +36,9 @@ class PlotAttrs:
         self.size    = size
         self.palette = palette
         self.__dict__.update(kwa)
-        for i in ('color', 'selection_color', 'nonselection_color'):
-            color = self.__dict__.get(i, None)
-            if isinstance(color, str) and len(color) and color[0] == '~':
-                self.__dict__[i] = {'dark': f'light{color[1:]}', 'basic': f'dark{color[1:]}'}
+        for i, j in list(self.__dict__.items()):
+            if i.endswith('color') and isinstance(j, str) and j[:1] == '~':
+                self.__dict__[i] = {'dark': f'light{j[1:]}', 'basic': f'dark{j[1:]}'}
 
 def defaultfigsize(*args) -> Tuple[int, int, str]:
     "return the default fig size"
