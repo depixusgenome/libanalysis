@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 "Basics for threading displays"
+import  asyncio
 from    abc                 import abstractmethod
 from    collections         import OrderedDict
 from    contextlib          import contextmanager
 from    enum                import Enum
+from    importlib           import import_module
 from    time                import time
-from    typing              import TypeVar, Generic, Optional, Callable
+from    typing              import TypeVar, Generic, ClassVar, Type, Optional, Callable
 
 from    bokeh.document      import Document
 from    bokeh.models        import Model
@@ -15,14 +17,12 @@ from    model.plots         import PlotAttrs
 from    utils.logconfig     import getLogger
 from    utils.inspection    import templateattribute as _tattr
 from    .plots              import PlotAttrsView
-from    .base               import threadmethod, spawn, SINGLE_THREAD
 
 LOGS     = getLogger(__name__)
 MODEL    = TypeVar('MODEL', bound = 'DisplayModel')
 DISPLAY  = TypeVar("DISPLAY")
 THEME    = TypeVar("THEME")
 ResetFcn = Optional[Callable[[dict], None]]
-
 
 class DisplayState(Enum):
     "plot state"
@@ -76,15 +76,104 @@ class _OrderedDict(OrderedDict):
         self[key]   = value
         return value
 
+class _ResetterDescr:
+    _name: str
+    __slots__ = ('_name',)
+
+    def __set_name__(self, _, name: str):
+        self._name = name
+
+    def __get__(self, inst, tpe):
+        return self if inst is None else getattr(getattr(inst, '_view'), self._name)
+
+    def __set__(self, inst, val):
+        return setattr(getattr(inst, '_view'), self._name, val)
+
+class _Resetter:
+    _state = _ResetterDescr()
+    _model = _ResetterDescr()
+    _doc   = _ResetterDescr()
+    _old: DisplayState
+
+    def __init__(self, ctrl, view: 'ThreadedDisplay', fcn: ResetFcn):
+        self._ctrl  = ctrl
+        self._view  = view
+        self._fcn   = fcn
+        self._time  = [time()]*2
+        self._cache = _OrderedDict()
+
+    def __call__(self, nothreading: bool, ctx: bool = True):
+        if getattr(BASE, 'SINGLE_THREAD') or nothreading:
+            self.__reset(ctx)
+            self._time[1] = time()
+            self.__end()
+            return
+
+        self.__reset(False)
+        self._old, self._state = self._state, DisplayState.abouttoreset
+        asyncio.create_task(self._reset_and_render())
+
+    def __end(self, other = None):
+        name  = type(self._view).__qualname__
+        delta = self._time[1] - self._time[0]
+        self._ctrl.display.handle('rendered', args = {'element': self._view})
+        if other:
+            LOGS.debug("%s.reset done in %.3f+%.3f", name, delta, other)
+        else:
+            LOGS.debug("%s.reset done in %.3f", name, delta)
+
+    def __reset(self, ctx: bool):
+        mdl = getattr(self._model, 'reset', None)
+        if not (mdl or ctx):
+            return
+
+        with self._view.resetting() as cache:
+            if mdl:
+                mdl(self._ctrl)
+            if ctx:
+                getattr(self._view, '_reset')(self._ctrl, cache)
+
+    async def _reset_and_render(self):
+        await asyncio.wrap_future(BASE.POOL.submit(self._reset_without_render))
+        self._time[1] = time()
+        if self._cache:
+            self._doc.add_next_tick_callback(self._render)
+        else:
+            self.__end()
+
+    def _reset_without_render(self):
+        try:
+            self._state = DisplayState.resetting
+            with self._ctrl.computation.type(self._ctrl, calls = self.__call__):
+                if self._fcn is None:
+                    getattr(self._view, '_reset')(self._ctrl, self._cache)
+                else:
+                    self._fcn(self._cache)
+        finally:
+            self._state = self._old
+
+    def _render(self):
+        start = time()
+        try:
+            if self._cache:
+                with self._ctrl.computation.type(self._ctrl, calls = self.__call__):
+                    with self._view.resetting() as inp:
+                        inp.update(self._cache)
+        finally:
+            self.__end(time() - start)
+
 class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-methods
     "Base plotter class"
-    _doc: Document
+    _doc:   Document
+    _model: MODEL
+    _state: DisplayState
+    _RESET: ClassVar[Type[_Resetter]] = _Resetter
 
     def __init__(self, model: MODEL = None, **kwa) -> None:
         "sets up this plotter's info"
         super().__init__()
-        self._model: MODEL = _tattr(self, 0)(**kwa) if model is None else model
-        self._state        = DisplayState.active
+        self._model = _tattr(self, 0)(**kwa) if model is None else model
+        self._state = DisplayState.active
 
     def swapmodels(self, ctrl):
         "swap models with those in the controller"
@@ -141,6 +230,11 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
     def ismain(self, _):
         "Set-up things if this view is the main one"
 
+    @staticmethod
+    def attrs(attrs:PlotAttrs) -> PlotAttrsView:
+        "shortcuts for PlotAttrsView"
+        return PlotAttrsView(attrs)
+
     def addtodoc(self, ctrl, doc):
         "returns the figure"
         self._doc = doc
@@ -152,84 +246,19 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
         old        = self._state
         self._state = DisplayState.active if val else DisplayState.disabled
         if val and (old is DisplayState.outofdate):
-            self.__doreset(ctrl, now)
+            _Resetter(ctrl, self, None)(now)
 
-    def reset(self, ctrl, now = False):
+    def reset(self, ctrl, now = False, fcn: ResetFcn = None):
         "Updates the data"
         state = self._state
         if   state is DisplayState.disabled:
             self._state = DisplayState.outofdate
 
         elif state is DisplayState.active:
-            self.__doreset(ctrl, now)
+            _Resetter(ctrl, self, fcn)(now)
 
         elif state is DisplayState.abouttoreset:
-            self.__reset(ctrl, False)
-
-    @staticmethod
-    def attrs(attrs:PlotAttrs) -> PlotAttrsView:
-        "shortcuts for PlotAttrsView"
-        return PlotAttrsView(attrs)
-
-    if SINGLE_THREAD:
-        # use this for single-thread debugging
-        LOGS.info("Running in single-thread mode")
-
-        def __doreset(self, ctrl, _):
-            start = time()
-            self.__reset(ctrl, True)
-            LOGS.debug("%s.reset done in %.3f", type(self).__qualname__, time() - start)
-    else:
-        def __doreset(self, ctrl, _):
-            if _:
-                start = time()
-                self.__reset(ctrl, True)
-                LOGS.debug("%s.reset done in %.3f", type(self).__qualname__, time() - start)
-                return
-
-            self.__reset(ctrl, False)
-
-            old, self._state = self._state, DisplayState.abouttoreset
-            spawn(self._reset_and_render, ctrl, old, None)
-
-        def _partialreset(self, ctrl, fcn: ResetFcn):
-            old, self._state = self._state, DisplayState.abouttoreset
-            spawn(self._reset_and_render, ctrl, old, fcn)
-
-        async def _reset_and_render(self, ctrl, old, fcn: ResetFcn):
-            start = time()
-            cache = _OrderedDict()
-            await threadmethod(self._reset_without_render, ctrl, old, cache, fcn)
-
-            msg = "%s.reset done in %.3f", type(self).__qualname__, time() - start
-            if cache:
-                self._doc.add_next_tick_callback(lambda: self._render(ctrl, cache, msg))
-            else:
-                ctrl.display.handle('rendered', args = {'element': self})
-                LOGS.debug(*msg)
-
-        def _reset_without_render(self, ctrl, old, cache, fcn: ResetFcn):
-            try:
-                self._state = DisplayState.resetting
-                with ctrl.computation.type(ctrl, calls = self.__doreset):
-                    if fcn is None:
-                        self._reset(ctrl, cache)
-                    else:
-                        fcn(cache)
-            finally:
-                self._state = old
-            return cache
-
-        def _render(self, ctrl, cache, msg):
-            start = time()
-            try:
-                if cache:
-                    with ctrl.computation.type(ctrl, calls = self.__doreset):
-                        with self.resetting() as inp:
-                            inp.update(cache)
-            finally:
-                ctrl.display.handle('rendered', args = {'element': self})
-                LOGS.debug(msg[0]+"+%.3f", *msg[1:], time() - start)
+            _Resetter(ctrl, self, fcn)(True, False)
 
     def _waitfornextreset(self) -> bool:
         """
@@ -241,17 +270,6 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             return True
         return self._state != DisplayState.active
 
-    def __reset(self, ctrl, ctx: bool):
-        mdl = getattr(self._model, 'reset', None)
-        if not (mdl or ctx):
-            return
-
-        with self.resetting() as cache:
-            if mdl:
-                mdl(ctrl)
-            if ctx:
-                self._reset(ctrl, cache)
-
     @abstractmethod
     def _addtodoc(self, ctrl, doc):
         "creates the plot structure"
@@ -259,3 +277,6 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
     @abstractmethod
     def _reset(self, ctrl, cache):
         "initializes the plot for a new file"
+
+
+BASE     = import_module(".base", package = __name__[:__name__.rfind('.')])
