@@ -10,14 +10,15 @@ DOCROUTE = "doc"
 ROUTE    = 'view'
 JQUERY   = [ROUTE+"/jquery.min.js", ROUTE+"/jquery-ui.min.js"]
 if 'app.scripting' in sys.modules:
-    sys.modules['app.scripting'].addload(__name__) # type: ignore
+    sys.modules['app.scripting'].addload(__name__)  # type: ignore
 
 def server(kwa):
     "adds a router to the server"
-    router = ("/%s/(.*)" % ROUTE, StaticFileHandler, { "path" : "static" })
+    router = ("/%s/(.*)" % ROUTE, StaticFileHandler, {"path": "static"})
     kwa.setdefault('extra_patterns', []).append(router)
 
-    router = ("/%s/(.*)" % DOCROUTE, StaticFileHandler, { "path" : "doc" })
+    path   = next((i for i in ("../doc", "doc") if Path(i).exists()), "doc")
+    router = ("/%s/(.*)" % DOCROUTE, StaticFileHandler, {"path": path})
     kwa.setdefault('extra_patterns', []).append(router)
 
 def route(*names:str):
@@ -28,8 +29,11 @@ def route(*names:str):
     out = []
     for name in names:
         path = Path("./static")/name
-        out.append(ROUTE+"/"+name
-                   +(f"?v={int(path.stat().st_mtime)}" if path.exists() else ""))
+        out.append(
+            ROUTE
+            + "/" + name
+            + (f"?v={int(path.stat().st_mtime)}" if path.exists() else "")
+        )
     return out
 
 class StaticHandler(RequestHandler):    # pylint: disable=abstract-method
