@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# pylint: disable=import-outside-toplevel
 "Utils for testing views"
 from   importlib import import_module
 from   pathlib   import Path
@@ -70,6 +71,7 @@ class DpxTestLoaded(Model):
     debug       = props.String()
     warn        = props.String()
     info        = props.String()
+
     def __init__(self, **kwa):
         super().__init__(**kwa)
         self.on_change("debug", self.__log_cb)
@@ -107,6 +109,7 @@ class DpxTestLoaded(Model):
 class WidgetAccess:
     "Access to bokeh models"
     _none = type('_none', (), {})
+
     def __init__(self, docs, key = None):
         self._docs = docs if isinstance(docs, (list, tuple)) else (docs,)
         self._key  = key
@@ -148,7 +151,7 @@ class WidgetAccess:
 
     def __call__(self):
         if self._key is not None:
-            raise KeyError("Could not find "+ self._key)
+            raise KeyError("Could not find " + self._key)
         return self._docs[0]
 
 class BaseSeleniumAccess:
@@ -259,7 +262,7 @@ class ModalAccess(BaseSeleniumAccess):
         super().click(f'//button[text()="{text}"]', False)
         return self
 
-    def click( # pylint: disable=arguments-differ
+    def click(  # pylint: disable=arguments-differ
             self,
             btn: Optional[str] = None,
             done: Optional[bool] = None
@@ -281,7 +284,7 @@ class SeleniumAccess(BaseSeleniumAccess):
         "return a ModalAccess"
         return ModalAccess(self.server, btn, done)
 
-class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
+class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
     """
     lets us use a current IOLoop with "with"
     and ensures the server unlistens
@@ -304,12 +307,13 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
 
     __warnings: Any
     __hdl:      ErrorHandler
+
     def __init__(self, mkpatch, kwa:dict, filters) -> None:
         self.server: Server   = None
         self.driver: Any      = None
         self.view:   Any      = None
         self.doc:    Document = None
-        self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch # type: ignore
+        self.monkeypatch      = self._Dummy() if mkpatch is None else mkpatch  # type: ignore
         self.kwa              = kwa
         self.kwa.setdefault('runtime', 'selenium')
         self.headless         = (
@@ -429,6 +433,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
             )
 
         old = getattr(webruntime.BaseRuntime, '_start_subprocess')
+
         def _start_subprocess(self, cmd, shell=False, **env):
             return old(self, cmd+['--headless'], shell, **env)
         self.monkeypatch.setattr(
@@ -445,6 +450,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
         haserr = [False]
         thread = [self.driver is not None, None]
         first  = [True]
+
         def _start(time = process_time()):
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
@@ -514,11 +520,15 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     @classmethod
     def path(cls, path: Union[Sequence[str], str]) -> Union[str, Sequence[str]]:
         "returns the path to testing data"
-        pathfcn = cls.PATH
-        if pathfcn is not None:
-            LOGS.debug("Test is opening: %s", path)
-            return pathfcn(path) # pylint: disable=not-callable
-        raise NotImplementedError()
+        try:
+            pathfcn = cls.PATH
+            if pathfcn is not None:
+                LOGS.debug("Test is opening: %s", path)
+                return pathfcn(path)  # pylint: disable=not-callable
+            raise NotImplementedError()
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGS.exception(exc)
+            raise
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
         "send command to the view"
@@ -563,6 +573,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     def save(self, path: str, andpress = True, waitfor = 10, **kwa):
         "save to a path"
         import view.dialog  # pylint: disable=import-error
+
         def _tkopen(*_1, **_2):
             LOGS.info("saving to path '%s'", path)
             return path
@@ -584,6 +595,7 @@ class _ManagedServerLoop: # pylint: disable=too-many-instance-attributes
     def load(self, path: Union[Sequence[str], str], andpress = True, rendered = True, **kwa):
         "loads a path"
         import view.dialog  # pylint: disable=import-error
+
         def _tkopen(*_1, **_2):
             out = self.path(path)
             LOGS.debug("opening path %s -> %s", path, out)
@@ -694,12 +706,13 @@ class BokehAction:
 
         self.monkeypatch = mkpatch
         tmp = tempfile.mktemp()+"_test"
+
         class _Dummy:
             user_config_dir = lambda *_: tmp+"/"+_[-1]
         self.monkeypatch.setattr(_conf, 'appdirs', _Dummy)
         self.server: _ManagedServerLoop = None
 
-    def start( # pylint: disable=too-many-arguments
+    def start(  # pylint: disable=too-many-arguments
             self,
             app:Union[type, str],
             mod:     str  = 'default',

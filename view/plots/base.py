@@ -218,7 +218,7 @@ class PlotAttrsView(PlotAttrs):
 
     @classmethod
     def _coloralpha(cls, args, prefix = ('line', 'fill')):
-        if args['color']:
+        if args.get('color', None):
             cls._alpha(args, prefix = prefix, name = 'color')
         else:
             args.pop('color', None)
