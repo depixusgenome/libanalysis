@@ -134,7 +134,13 @@ class _Resetter:
                 getattr(self._view, '_reset')(self._ctrl, cache)
 
     async def _reset_and_render(self):
-        await asyncio.wrap_future(BASE.POOL.submit(self._reset_without_render))
+        try:
+            await asyncio.wrap_future(BASE.POOL.submit(self._reset_without_render))
+        except Exception:  # pylint: disable=broad-except
+            self._time[1] = time()
+            self.__end()
+            raise
+
         self._time[1] = time()
         if self._cache:
             self._doc.add_next_tick_callback(self._render)
@@ -246,7 +252,7 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
         old        = self._state
         self._state = DisplayState.active if val else DisplayState.disabled
         if val and (old is DisplayState.outofdate):
-            _Resetter(ctrl, self, None)(now)
+            self._RESET(ctrl, self, None)(now)
 
     def reset(self, ctrl, now = False, fcn: ResetFcn = None):
         "Updates the data"
@@ -255,10 +261,10 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             self._state = DisplayState.outofdate
 
         elif state is DisplayState.active:
-            _Resetter(ctrl, self, fcn)(now)
+            self._RESET(ctrl, self, fcn)(now)
 
         elif state is DisplayState.abouttoreset:
-            _Resetter(ctrl, self, fcn)(True, False)
+            self._RESET(ctrl, self, fcn)(True, False)
 
     def _waitfornextreset(self) -> bool:
         """
