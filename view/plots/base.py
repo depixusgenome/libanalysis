@@ -253,19 +253,16 @@ class PlotAttrsView(PlotAttrs):
         cls._default(args)
         cls._coloralpha(args)
 
-    _cross    = _triangle
-    _diamond  = _triangle
-    _square   = _triangle
-    _vbar     = _patch
-    _quad     = _line
+    _square = _diamond = _cross = _triangle
+    _vbar   = _patch
+    _quad   = _line
 
     @classmethod
     def _rect(cls, args):
         cls._default(args)
         args.pop('size')
 
-    _ellipse  = _rect
-    _oval     = _rect
+    _ellipse  = _oval = _segment = _rect
 
     @staticmethod
     def _image(args):
