@@ -7,7 +7,7 @@ from    typing    import Union, Sequence, Dict, Any
 import  os
 import  sys
 import  warnings
-from    pytest    import mark, fixture, param
+from    pytest     import mark, fixture, param
 import  numpy as np
 
 NO_DISPLAY      = not (sys.platform.startswith("win") or 'DISPLAY' in os.environ)
