@@ -51,9 +51,9 @@ class DisplayModel(Generic[DISPLAY, THEME]):
     def swapmodels(self, ctrl):
         "add the models to the controllers"
         if hasattr(self.theme, 'name'):
-            ctrl.theme.swapmodels(self.theme)
+            self.theme = ctrl.theme.swapmodels(self.theme)
         if hasattr(self.display, 'name'):
-            ctrl.display.swapmodels(self.display)
+            self.display = ctrl.display.swapmodels(self.display)
 
         for i in self.__dict__.values():
             if callable(getattr(i, 'swapmodels', None)):
