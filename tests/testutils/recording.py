@@ -41,7 +41,11 @@ def _record(request):
                     stream[self._key] = value
                     del self._key
                     return True
-                approx = __eq__
+
+                # pylint: disable= unused-argument
+                def approx(self, value, rtol = 1e-5, atol = 1e-5):
+                    "compare approximatly"
+                    return self.__eq__(value)
             else:
 
                 def __eq__(self, value):
