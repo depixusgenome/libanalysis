@@ -81,7 +81,7 @@ class ViewWithToolbar(Generic[TOOLBAR, VIEW]):
 
 def toolbarview(tbar, main) -> type:
     "return the view with toolbar"
-    cls = getclass(tbar), getclass(main)
+    cls = getclass(tbar), getclass(main)   # pylint: disable=unused-variable
 
     class ToolbarView(ViewWithToolbar[cls]):  # type: ignore
         "Toolbar view"
