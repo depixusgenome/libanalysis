@@ -107,9 +107,17 @@ class BodyParser:
             j.strip()
             for j in (body.strip().splitlines() if isinstance(body, str) else body)
         )
-        found: bool      = True
-        lines: List[str] = []
+        found:    bool      = True
+        lines:    List[str] = []
+        scripts:  str       = ""
+        isscript: bool      = False
         for i in tmp:
+            isscript |= '<script>' in i
+            if isscript:
+                scripts += i
+                isscript = '</script>' not in i
+                continue
+
             if found and not i:
                 continue
             if i.startswith("### "):
@@ -130,6 +138,9 @@ class BodyParser:
         except Exception as exc:  # pylint: disable=broad-except
             LOGS.exception(exc)
             out = "Error!", f"<p>{str(exc)}</p>"
+
+        if scripts:
+            return dict(body = out[1], title = out[0], scripts = scripts)
         return dict(body = out[1], title = out[0])
 
     @classmethod

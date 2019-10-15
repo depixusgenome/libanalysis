@@ -38,6 +38,7 @@ class DpxModal(Model):
     def run(self,                                       # pylint: disable=too-many-arguments
             title:    str                       = "",
             body:     Union[Sequence[str],str]  = "",
+            scripts:  str                       = "",
             callback: Callback                  = None,
             context:  Callable[[str], Any]      = None,
             model                               = None,
@@ -53,7 +54,7 @@ class DpxModal(Model):
         self.__always  = always
         self.__running = False
         self.update(title      = title,
-                    body       = tohtml(body, model),
+                    body       = tohtml(body, model)+scripts,
                     callback   = callback,
                     buttons    = "none" if buttons is None else buttons,
                     keycontrol = keycontrol,
