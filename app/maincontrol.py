@@ -47,7 +47,7 @@ class WithMessage:
         def _wrapped(*args, **kwa):
             try:
                 return fcn(*args, **kwa)
-            except Exception as exc: # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 self.__apply(exc)
                 raise
         return _wrapped
@@ -282,6 +282,13 @@ class BaseSuperController:
     def _bokeh(self, keys, doc):
         for mdl in orders().dynloads():
             getattr(sys.modules.get(mdl, None), 'document', lambda x: None)(doc)
+
+        #  retry saving the cache as new bokeh models may have been added
+        #  since app.launcher's call
+        from .launcher import CAN_LOAD_JS
+        if CAN_LOAD_JS:
+            from utils.gui import storedjavascript
+            storedjavascript(CAN_LOAD_JS, self.APPNAME)
 
         roots = [
             getattr(i, 'addtodoc', lambda *_: None)(self, doc)
