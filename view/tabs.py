@@ -15,9 +15,10 @@ from modaldialog.builder import changelog
 from view.base           import BokehView
 from version             import timestamp as _timestamp
 
-class TabsTheme: # pylint: disable=too-many-instance-attributes
+class TabsTheme:  # pylint: disable=too-many-instance-attributes
     "Tabs Theme"
     CHANGELOG = "CHANGELOG.html"
+
     def __init__(self, initial: str, panels: Dict[Type, str], version = 0, startup = "") -> None:
         self.name:    str            = "app.tabs"
         self.startup: str            = startup
@@ -47,21 +48,25 @@ class TabsTheme: # pylint: disable=too-many-instance-attributes
             return changelog(stream, name, self.docurl)
         return None
 
+
 TThemeType = TypeVar("TThemeType", bound = TabsTheme)
+
+
 class TabsView(Generic[TThemeType], BokehView):
     "A view with all plots"
-    KEYS    : ClassVar[Dict[type, str]]
-    NAME    : ClassVar[str]
-    _tabs   : Tabs
-    __theme : TabsTheme
+    KEYS:    ClassVar[Dict[type, str]]
+    NAME:    ClassVar[str]
+    _tabs:   Tabs
+    __theme: TabsTheme
+
     def __init__(self, ctrl = None, **kwa):
         "Sets up the controller"
         super().__init__(ctrl = ctrl, **kwa)
-        mdl             = templateattribute(self, 0)()# type: ignore
+        mdl             = templateattribute(self, 0)()  # type: ignore
         mdl.width       = kwa.get('width',  ctrl.theme.get("theme", 'appsize')[0])
         mdl.panelheight = (
             kwa.get('height', ctrl.theme.get("theme", 'tabheight'))
-            -mdl.height
+            - mdl.height
         )
         self.__theme    = ctrl.theme.add(mdl)
         ctrl.theme.updatedefaults("theme", tabheight = mdl.panelheight)
@@ -72,6 +77,13 @@ class TabsView(Generic[TThemeType], BokehView):
             desc = type(panel.plotter).state
             desc.setdefault(panel.plotter, (PlotState.active if panel is cur else
                                             PlotState.disabled))
+
+    def swapmodels(self, ctrl):
+        "swap models"
+        self.__theme = ctrl.theme.swapmodels(self.__theme)
+        for i in self.__panels:
+            if hasattr(i, 'swapmodels'):
+                i.swapmodels(ctrl)
 
     @property
     def _panels(self):
@@ -138,6 +150,7 @@ class TabsView(Generic[TThemeType], BokehView):
         tabs  = self.__createtabs(self.__setstates())
 
         roots = [None]*len(self._panels)
+
         def _root(ind):
             if roots[ind] is None:
                 ret = self._panels[ind].addtodoc(ctrl, doc)
