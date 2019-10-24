@@ -49,7 +49,7 @@ class _FunctionHandler(FunctionHandler):
     def serveapplication(cls, view, **kwa):
         "Launches a bokeh server"
         # monkeypatch the js production: it's been done once & saved during compilation
-        cls.__monkeypatch_bokeh(view)
+        cls.__monkeypatch_bokeh()
         cls.__setport(kwa)
         cls.__server_kwargs(kwa)
         fcn                = cls(view)
@@ -91,7 +91,7 @@ class _FunctionHandler(FunctionHandler):
         StreamReader.run = run
 
     @staticmethod
-    def __monkeypatch_bokeh(view):
+    def __monkeypatch_bokeh():
         # pylint: disable=import-outside-toplevel
         from bokeh.core.properties import Seq
         def from_json(self, json, models=None, __old__ = Seq.from_json):
@@ -104,23 +104,11 @@ class _FunctionHandler(FunctionHandler):
             return __old__(self, json, models = models)
         Seq.from_json = from_json
 
-        if CAN_LOAD_JS:
-            from utils.gui import storedjavascript
-            storedjavascript(CAN_LOAD_JS, view.APPNAME)
-
         def _stop(self, wait=True, __old__ = Server.stop):
             if not getattr(self, '_stopped', False):
                 __old__(self, wait)
             self.io_loop.stop()
         Server.stop = _stop
-
-        import bokeh
-        if bokeh.__version__ in {'1.0.4', '1.2.0'}:
-            from bokeh.models.plots import Plot, error, BAD_EXTRA_RANGE_NAME
-            @error(BAD_EXTRA_RANGE_NAME)
-            def _check_bad_extra_range_name(_):
-                return None
-            setattr(Plot, '_check_bad_extra_range_name', _check_bad_extra_range_name)
 
     @staticmethod
     def __server_kwargs(kwa)-> Dict[str, Any]:

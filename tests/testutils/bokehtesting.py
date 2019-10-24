@@ -7,7 +7,6 @@ from   pathlib   import Path
 from   time      import time as process_time
 from   typing    import Optional, Union, Sequence, Any, cast
 from   threading import Thread
-from   functools import partial
 import os
 import tempfile
 import warnings
@@ -382,23 +381,13 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
         app, launch = self.__getlauncher()
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', '.*inspect.getargspec().*')
-            import utils.gui as _gui
-            from   app.scripting import addload
-            from   utils.gui     import storedjavascript
 
-            name = "___"
-            for j in inspect.getouterframes(inspect.currentframe()):
-                if j.function.startswith("test_"):
-                    name = j.function
+            from   app.scripting import addload
             addload("view.static", "modaldialog")
-            _gui.storedjavascript = lambda *_: storedjavascript("tests", name)
             kwa.setdefault('port', 'random')
             if self.headless and kwa.get('runtime', '') != 'none':
                 kwa.pop('runtime', None)
-            try:
-                server = launch(app, **kwa)
-            finally:
-                _gui.storedjavascript = storedjavascript
+            server = launch(app, **kwa)
 
         self.__patchserver(server)
         return server
@@ -449,9 +438,9 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
     def __start(self):
         haserr = [False]
         thread = [self.driver is not None, None]
-        first  = [True]
+        time   = [process_time()]
 
-        def _start(time = process_time()):
+        def _start(first = [True]):
             "Waiting for the document to load"
             if getattr(self.loading, 'done', False):
                 LOGS.debug("done waiting")
@@ -465,25 +454,60 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
                     self.loop.call_later(0.5, _start)
                 else:
                     self.loop.call_later(2., self.loop.stop)
-            elif process_time()-time > 20:
+            elif process_time()-time[0] > 20:
                 haserr[0] = True
                 self.loop.stop()
             else:
                 if thread[0]:
-                    fcn       = partial(self.driver.get, f"http://localhost:{self.server.port}")
+
+                    def fcn():
+                        LOGS.debug(">>>>>>>>>>>> DRIVER getting local host")
+                        # pylint: disable=import-error
+                        from selenium.webdriver import Firefox, FirefoxOptions
+                        opts          = FirefoxOptions()
+                        opts.headless = self.headless
+                        self.driver   = Firefox(options = opts)
+                        self.driver.get(f"http://localhost:{self.server.port}")
+                        LOGS.debug("<<<<<<<<<<<< DRIVER getting local host")
+
                     thread[0] = False
                     thread[1] = Thread(target = fcn)
                     thread[1].start()
-                LOGS.debug("waiting %s", process_time()-time)
+                LOGS.debug("waiting %s", process_time()-time[0])
                 self.loop.call_later(0.5, _start)
-        _start()
 
-        self.server.start()
-        self.loop.start()
-        assert len(self.__hdl.lst) == 0, "gui construction failed"
-        assert not haserr[0], "could not start gui"
-        if thread[1] is not None:
-            thread[1].join()
+        import utils.gui as _gui
+        old = _gui.storedjavascript
+
+        def _new(inpt, _):
+            time[0] = -1e20
+
+            name = next(
+                (
+                    j.function
+                    for j in inspect.getouterframes(inspect.currentframe())
+                    if j.function.startswith("test_")
+                ), _
+            )
+            LOGS.info("Compiling JS to %s", name)
+            old(inpt, name)
+            time[0] = process_time()
+            LOGS.info("Compiled JS to %s", name)
+
+        _gui.storedjavascript  = _new
+
+        try:
+            _start()
+
+            self.server.start()
+            self.loop.start()
+            assert len(self.__hdl.lst) == 0, "gui construction failed"
+            assert not haserr[0], "could not start gui"
+            if thread[1] is not None:
+                thread[1].join()
+        finally:
+            _gui.storedjavascript  = old
+            pass
 
     def __enter__(self):
         self.__set_display()
@@ -492,11 +516,7 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
         kwa    = dict(self.kwa)
         if kwa.get('runtime', '') == 'selenium':
             kwa.update(runtime = 'none')
-            # pylint: disable=import-error
-            from selenium.webdriver import Firefox, FirefoxOptions
-            opts          = FirefoxOptions()
-            opts.headless = self.headless
-            self.driver   = Firefox(options = opts)
+            self.driver = True
 
         self.server = self.__buildserver(kwa)
         self.__start()
@@ -508,7 +528,8 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
             self.quit()
         self.__warnings.__exit__(*_)
         if self.driver is not None:
-            self.driver.quit()
+            if self.driver is not True:
+                self.driver.quit()
             self.driver = None
 
         for _1, j  in iterloggers():

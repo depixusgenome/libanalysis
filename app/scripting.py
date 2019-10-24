@@ -29,11 +29,17 @@ class Orders(list):
                 return
 
             cmd = lst.pop(0)
-            if callable(cmd):
-                with Action(ctrl):
-                    cmd(ctrl)
-            else:
-                ctrl.display.handle(cmd, ctrl.display.emitpolicy.nothing)
+            LOGS.debug("+++++++++++++ Running startup script %d: %s", len(lst), cmd)
+            try:
+                if callable(cmd):
+                    with Action(ctrl):
+                        cmd(ctrl)
+                else:
+                    ctrl.display.handle(cmd, ctrl.display.emitpolicy.nothing)
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGS.exception(exc)
+            finally:
+                LOGS.debug("+++++++++++++ done (%s)", cmd)
             nextfcn(_cmd)
         return _cmd
 
@@ -45,18 +51,20 @@ class Orders(list):
         ctrl   = viewcls.open(doc)
         script = self.__script(ctrl, doc)
         if isinstance(doc, DummyDoc):
+            LOGS.info("Running script")
             if onload is not None:
                 onload()
 
             loop = IOLoop.current()
             loop.run_sync(script)
         else:
+            LOGS.info("Running GUI")
             loaded = DpxLoaded()
-            doc.add_root(loaded)
             if onload is not None:
                 loaded.on_change('done', lambda attr, old, new: (onload(), script()))
             else:
                 loaded.on_change('done', lambda attr, old, new: script())
+            doc.add_root(loaded)
         return ctrl
 
     def dynloads(self):
