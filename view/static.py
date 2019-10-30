@@ -17,7 +17,7 @@ def server(kwa):
     router = ("/%s/(.*)" % ROUTE, StaticFileHandler, {"path": "static"})
     kwa.setdefault('extra_patterns', []).append(router)
 
-    path   = next((i for i in ("../doc", "doc") if Path(i).exists()), "doc")
+    path   = next((i for i in ("doc", "../doc") if Path(i).exists()), "doc")
     router = ("/%s/(.*)" % DOCROUTE, StaticFileHandler, {"path": path})
     kwa.setdefault('extra_patterns', []).append(router)
 
