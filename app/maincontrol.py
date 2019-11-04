@@ -4,6 +4,8 @@
 import sys
 from   contextlib              import contextmanager
 from   functools               import wraps
+from   importlib               import import_module
+from   pathlib                 import Path
 from   copy                    import deepcopy
 from   typing                  import Dict, Any, List, Union, Iterable
 
@@ -175,12 +177,25 @@ class BaseSuperController:
         # pylint: disable=protected-access
         return cls(None)._open(viewcls, doc, kwa)
 
+    @staticmethod
+    def version() -> str:
+        "return the current version"
+        try:
+            return import_module("version").version()  # type: ignore
+        except ImportError:
+            return ""
+
+    def apppath(self) -> Path:
+        "return the current version"
+        return ConfigurationIO(self).apppath()
+
     def close(self):
         "remove controller"
         top, self.topview = self.topview, None
         if top is None:
             return
 
+        self.display.handle('applicationstopped', self.display.emitpolicy.nothing)
         self.writeuserconfig()
         for i in tuple(self.__dict__.values()) + (top, self.FLEXXAPP):
             getattr(i, 'close', lambda: None)()
