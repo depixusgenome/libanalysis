@@ -135,7 +135,7 @@ class _Resetter:
 
     async def _reset_and_render(self):
         try:
-            await asyncio.wrap_future(BASE.POOL.submit(self._reset_without_render))
+            await ThreadedDisplay.threadmethod(self._reset_without_render)
         except Exception:  # pylint: disable=broad-except
             self._time[1] = time()
             self.__end()
@@ -202,6 +202,11 @@ class ThreadedDisplay(Generic[MODEL]):  # pylint: disable=too-many-public-method
             self._reset(ctrl, cache)
         finally:
             self._state     = old
+
+    @staticmethod
+    async def threadmethod(method):
+        "use the threadpool to thread a method"
+        return await asyncio.wrap_future(BASE.POOL.submit(method))
 
     @contextmanager
     def resetting(self):
