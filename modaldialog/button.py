@@ -66,24 +66,25 @@ class ModalDialogButton(Generic[Theme, Model]):
             icon   = icon
         )
 
-        @self._widget.on_click
-        def _onclick_cb():
-            "method to trigger the modal dialog"
-            try:
-                current = self._newmodel(ctrl)
-                default = self._defaultmodel(ctrl, current)
-                return dialog(
-                    doc,
-                    **tohtml(self._body(current), current, default),
-                    context = partial(self._onsubmit, ctrl, deepcopy(current), current),
-                    model   = current,
-                    always  = True
-                )
-            except Exception as exc:  # pylint: disable=broad-except
-                LOGS.exception(exc)
-                tohtml(f"ERROR: {exc}")
+        self._widget.on_click(partial(self.run, ctrl, doc))
 
         return [self._widget]
+
+    def run(self, ctrl, doc):
+        "method to trigger the modal dialog"
+        try:
+            current = self._newmodel(ctrl)
+            default = self._defaultmodel(ctrl, current)
+            return dialog(
+                doc,
+                **tohtml(self._body(current), current, default),
+                context = partial(self._onsubmit, ctrl, deepcopy(current), current),
+                model   = current,
+                always  = True
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGS.exception(exc)
+            tohtml(f"ERROR: {exc}")
 
     @contextmanager
     def _onsubmit(self, ctrl, current, changed, _):

@@ -62,6 +62,11 @@ class DpxModal(Model):
         self.__running      = True
         self.startdisplay   = self.startdisplay+1
 
+    @property
+    def isrunning(self) -> bool:
+        "is running ?"
+        return self.__running
+
     def _onresults_cb(self, attr, old, new):
         pass
 

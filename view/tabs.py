@@ -146,7 +146,7 @@ class TabsView(Generic[TThemeType], BokehView):
                     height = self.__theme.height)
 
     @staticmethod
-    def _addtodoc_oneshot() -> Tuple[str, str]:
+    def _addtodoc_oneshot(*_) -> Tuple[str, str]:
         return "display", "applicationstarted"
 
     def addtodoc(self, ctrl, doc):
@@ -193,7 +193,7 @@ class TabsView(Generic[TThemeType], BokehView):
             children = list(row.children)[:-1]
             row.update(children = children+[_root(itm)])
 
-        one, name = self._addtodoc_oneshot()
+        one, name = self._addtodoc_oneshot(ctrl, doc)
         getattr(ctrl, one).oneshot(name, _fcn)
         return row
 

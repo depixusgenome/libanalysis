@@ -235,7 +235,7 @@ class CheckOption(Option):
             assert len(key), "keys must have a name"
             val = ''
             if 'style' not in attr:
-                attr += ' style="width:15px;"'
+                attr += ' style="width:15px;align-self:center"'
             try:
                 if bool(cls.getvalue(model, key, False)):
                     val = "checked"

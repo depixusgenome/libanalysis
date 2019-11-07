@@ -29,3 +29,11 @@ def dialog(doc, **_):
             return root.run(**runargs) if len(runargs) else root
 
     raise RuntimeError('DpxModal is missing from the document')
+
+def dialogisrunning(doc):
+    "returns the DpxModal in this doc"
+    for root in doc.roots:
+        if isinstance(root, DpxModal):
+            return root.isrunning
+
+    raise RuntimeError('DpxModal is missing from the document')
