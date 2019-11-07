@@ -273,15 +273,15 @@ def test_check():
     truth = [
         (
             """1 <div class ="bk bk-input-group"><input type="checkbox" name="first" """
-            """checked class=\'bk bk-input\'/></div>"""
+            """checked class=\'bk bk-input\' style="width:15px;align-self:center"/></div>"""
         ),
         (
             """2 <div class ="bk bk-input-group"><input type="checkbox" """
-            """name="second[0]"  class=\'bk bk-input\'/></div>"""
+            """name="second[0]"  class=\'bk bk-input\' style="width:15px;align-self:center"/></div>"""
         ),
         (
             """3 <div class ="bk bk-input-group"><input type="checkbox" """
-            """name="third[0].third" checked class='bk bk-input'/></div>"""
+            """name="third[0].third" checked class='bk bk-input' style="width:15px;align-self:center"/></div>"""
         )
     ]
     assert body == truth
