@@ -90,6 +90,11 @@ class TabsView(Generic[TThemeType], BokehView):
         vals = {self.__key(i): i for i in self.__panels}
         return [vals[i] for i in self.__theme.titles]
 
+    @property
+    def current(self):
+        "return the current plotter"
+        return next(j.plotter for j in self._panels if j.plotter.isactive())
+
     def __initial(self):
         "return the initial tab"
         return next(i for i, j in self.KEYS.items() if j == self.__theme.initial)
