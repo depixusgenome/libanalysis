@@ -48,38 +48,12 @@ export class DpxTestLoaded extends Model {
     constructor(attrs?:Partial<DpxTestLoaded.Attrs>) {
         super(attrs);
         jQuery(() => this.done = 1)
-
-        let oldlog   = console.log
-        console.log  = (...args) => this._tostr(oldlog, 'debug', args)
-
-        let oldinfo  = console.info
-        console.info = (...args) => this._tostr(oldinfo, 'info', args)
-
-        let oldwarn  = console.warn
-        console.warn = (...args) => this._tostr(oldwarn, 'warn', args)
-    }
-
-    _tostr(old:any, name:string, args:any[]): void {
-        old.apply(console, args)
-
-        let str = ""
-        for(let i in args)
-            str = str + " " + i
-        if(name == 'debug')
-        {
-            this.debug = ""
-            this.debug = str
-        }
-        if(name == 'info')
-        {
-            this.info = ""
-            this.info = str
-        }
-        if(name == 'warn')
-        {
-            this.warn = ""
-            this.warn = str
-        }
+        window.onerror = function(message, source, lineno, colno, error) {
+            var elem = document.createElement("p");
+            elem.innerHTML = `${source} [${lineno}-${colno}]: ${message} // ${error}`;
+            (elem as any).classList.add('dpx-test-error');
+            document.body.appendChild(elem);
+        };
     }
 
     _create_evt(name:string) {
@@ -119,6 +93,9 @@ export class DpxTestLoaded extends Model {
             for(let i in this.attrs)
                 mdl = mdl[i]
 
+            if(typeof mdl === undefined)
+                throw `Could not find ${this.attrs} in ${root}`;
+
             if(this.attr == "clicks" && mdl instanceof Button)
             {
                 mdl.clicks = mdl.clicks + 1
@@ -132,7 +109,12 @@ export class DpxTestLoaded extends Model {
             {
                 mdl[this.attr] = this.value
                 if(this.attrs.length == 0)
+                {
+                    try { root.properties[this.attr].change.emit; }
+                    catch (e)
+                    { throw new Error(`Missing ${this.attr} in ${root}`); }
                     root.properties[this.attr].change.emit()
+                }
                 else
                     root.properties[this.attrs[0]].change.emit()
             }

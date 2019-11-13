@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 "Base event handler"
 import re
+import asyncio
 
 from enum               import Enum, unique
 from itertools          import product
@@ -387,22 +388,38 @@ class Event:
             self._fcn  = fcn
 
         def __call__(self, *args, **kwa):
+            fcn = self.discard()
+            return fcn(*args, **kwa) if callable(fcn) else None
+
+        def discard(self) -> Optional[Callable]:
+            "remove from handlers"
             if not len(self.__dict__):
                 return None
-            assert self in self._hdls[self._name]
-            self._hdls[self._name].discard(self)
-            fcn = self._fcn
-            self.__dict__.clear()  # make sure the function cannot be called again
-            return fcn(*args, **kwa)
 
-    def oneshot(self, name: str, fcn):
+            fcn = self._fcn
+            self._hdls[self._name].discard(self)
+            self.__dict__.clear()  # make sure the function cannot be called again
+            return fcn
+
+        def timeout(self, timeout: Optional[float]):
+            "add a timeout on this observer"
+            if timeout:
+                async def _rem():
+                    await asyncio.sleep(timeout)
+                    self.discard()
+
+                asyncio.create_task(_rem())
+            return self
+
+    def oneshot(self, name: str, fcn, timeout: Optional[float] = None):
         """
         one shot observation
         """
         name = name.lower().strip()
-        shot = self._OneShot(self._handlers, name, fcn)
+        shot = self._OneShot(self._handlers, name, fcn).timeout(timeout)
         self.__add_func([name], shot)
         assert shot in self._handlers[name]
+        return shot
 
     def close(self):
         "Clear all handlers"

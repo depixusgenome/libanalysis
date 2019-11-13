@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-outside-toplevel
 "Utils for testing views"
+import asyncio
 from   importlib import import_module
 from   pathlib   import Path
 from   time      import time as process_time
@@ -501,13 +502,15 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
 
             self.server.start()
             self.loop.start()
+            if self.driver:
+                for err in self.driver.find_elements_by_class_name("dpx-test-error"):
+                    LOGS.error("JS: %s", err.text)
             assert len(self.__hdl.lst) == 0, "gui construction failed"
             assert not haserr[0], "could not start gui"
             if thread[1] is not None:
                 thread[1].join()
         finally:
             _gui.storedjavascript  = old
-            pass
 
     def __enter__(self):
         self.__set_display()
@@ -526,6 +529,9 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
         if self.server is not None:
             self.wait()
             self.quit()
+        if self.driver:
+            for err in self.driver.find_elements_by_class_name("dpx-test-error"):
+                LOGS.error("JS: %s", err.text)
         self.__warnings.__exit__(*_)
         if self.driver is not None:
             if self.driver is not True:
@@ -553,12 +559,31 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
 
     def cmd(self, fcn, *args, andstop = True, andwaiting = 2., rendered = False, **kwargs):
         "send command to the view"
+        if rendered and not isinstance(rendered, (list, tuple)):
+            rendered  = (rendered, 60*5)
+
         if rendered:
-            self.ctrl.display.oneshot(
-                rendered if isinstance(rendered, str) else "rendered",
-                lambda *_1, **_2: self.wait()
-            )
+            if isinstance(rendered[0], (float, int)):
+                rendered = rendered[1], rendered[0]
+
+            @self.doc.add_next_tick_callback
+            def _cmdwait():
+
+                async def _tout():
+                    shot = self.ctrl.display.oneshot(
+                        rendered[0] if isinstance(rendered[0], str) else "rendered",
+                        (lambda *_1, **_2: self.wait()),
+                    )
+
+                    await asyncio.sleep(rendered[1])
+
+                    if shot.discard():
+                        self.doc.add_next_tick_callback(self.wait)
+
+                asyncio.create_task(_tout())
+
             andstop = False
+
         if andstop:
             def _cmd():
                 LOGS.debug("running: %s(*%s, **%s)", fcn.__name__, args, kwargs)
