@@ -187,25 +187,26 @@ class BaseSeleniumAccess:
         "click on a button"
         return self[name].get_attribute("class")
 
-    def click(self, name, wait = True):
+    def click(self, name, wait = True, rendered = None):
         "click on a button"
         self[name].click()
-        if wait:
-            self.server.wait()
+        if wait or rendered is not None:
+            self.server.wait(rendered = rendered)
 
 class ModalAccess(BaseSeleniumAccess):
     "Access to selenium driver"
-    def __init__(self, server, btn: str, done = False):
+    def __init__(self, server, btn: str, done = False, rendered = False):
         super().__init__(server)
         self.cancel = not done
         self.btn    = btn
+        self.rendered = rendered
 
     def close(self, done = None):
         "click on the modal's apply button"
         if done is None:
             done = not self.cancel
 
-        super().click(f".dpx-modal-{'done' if done else 'cancel'}")
+        super().click(f".dpx-modal-{'done' if done else 'cancel'}", rendered = self.rendered)
 
     def isdisplayed(self) -> bool:
         "checks whether it's open"
@@ -251,7 +252,7 @@ class ModalAccess(BaseSeleniumAccess):
         super().click(f'//button[text()="{text}"]', False)
         return self
 
-    def click(  # pylint: disable=arguments-differ
+    def click(  # type: ignore  # pylint: disable=arguments-differ
             self,
             btn: Optional[str] = None,
             done: Optional[bool] = None
@@ -269,9 +270,9 @@ class ModalAccess(BaseSeleniumAccess):
 
 class SeleniumAccess(BaseSeleniumAccess):
     "Access to selenium driver"
-    def modal(self, btn: str, done: bool = True) -> ModalAccess:
+    def modal(self, btn: str, done: bool = True, rendered = False) -> ModalAccess:
         "return a ModalAccess"
-        return ModalAccess(self.server, btn, done)
+        return ModalAccess(self.server, btn, done, rendered)
 
 class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
     """
@@ -598,7 +599,7 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
     def wait(self, time = 2., rendered = False):
         "wait some more"
         if rendered:
-            self.cmd(lambda: None, andwaiting = time, rendered = True)
+            self.cmd(lambda: None, andwaiting = time, rendered = rendered)
         else:
             self.cmd(lambda: None, andwaiting = time)
 
