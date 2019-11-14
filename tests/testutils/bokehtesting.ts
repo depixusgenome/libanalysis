@@ -19,9 +19,6 @@ export namespace DpxTestLoaded {
         attr : p.Property<string>
         value: p.Property<any>
         value_cnt: p.Property<number>
-        debug: p.Property<string>
-        warn: p.Property<string>
-        info: p.Property<string>
     }
 }
 
@@ -134,9 +131,6 @@ export class DpxTestLoaded extends Model {
             attr : [p.String, ''],
             value: [p.Any,   {}],
             value_cnt: [p.Int, 0],
-            debug: [p.String, ''],
-            warn: [p.String, ''],
-            info: [p.String, ''],
         })
     }
 }

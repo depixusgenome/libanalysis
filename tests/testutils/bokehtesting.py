@@ -68,20 +68,9 @@ class DpxTestLoaded(Model):
     attr        = props.String()
     value       = props.Any()
     value_cnt   = props.Int(0)
-    debug       = props.String()
-    warn        = props.String()
-    info        = props.String()
 
     def __init__(self, **kwa):
         super().__init__(**kwa)
-        self.on_change("debug", self.__log_cb)
-        self.on_change("warn",  self.__log_cb)
-        self.on_change("info",  self.__log_cb)
-
-    @staticmethod
-    def __log_cb(attr, old, new):
-        if new != '':
-            getattr(LOGS, attr)('JS <- '+new)
 
     def press(self, key, model):
         "Sets-up a new keyevent in JS"
@@ -462,14 +451,14 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
                 if thread[0]:
 
                     def fcn():
-                        LOGS.debug(">>>>>>>>>>>> DRIVER getting local host")
+                        LOGS.debug("DRIVER getting local host")
                         # pylint: disable=import-error
                         from selenium.webdriver import Firefox, FirefoxOptions
                         opts          = FirefoxOptions()
                         opts.headless = self.headless
                         self.driver   = Firefox(options = opts)
                         self.driver.get(f"http://localhost:{self.server.port}")
-                        LOGS.debug("<<<<<<<<<<<< DRIVER getting local host")
+                        LOGS.debug("DRIVER getting local host")
 
                     thread[0] = False
                     thread[1] = Thread(target = fcn)
@@ -490,10 +479,13 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
                     if j.function.startswith("test_")
                 ), _
             )
+
+            tmp  = process_time()
             LOGS.info("Compiling JS to %s", name)
             old(inpt, name)
+            LOGS.info("Compiled JS to %s in %.0f seconds", name, process_time() - tmp)
+
             time[0] = process_time()
-            LOGS.info("Compiled JS to %s", name)
 
         _gui.storedjavascript  = _new
 
@@ -568,17 +560,21 @@ class _ManagedServerLoop:  # pylint: disable=too-many-instance-attributes
 
             @self.doc.add_next_tick_callback
             def _cmdwait():
+                LOGS .debug("Oneshot wait on %s", rendered)
+                shot = self.ctrl.display.oneshot(
+                    rendered[0] if isinstance(rendered[0], str) else "rendered",
+                    (lambda *_1, **_2: self.loop.call_later(andwaiting, self.loop.stop))
+                )
 
                 async def _tout():
-                    shot = self.ctrl.display.oneshot(
-                        rendered[0] if isinstance(rendered[0], str) else "rendered",
-                        (lambda *_1, **_2: self.wait()),
-                    )
-
-                    await asyncio.sleep(rendered[1])
+                    for _ in range(rendered[1]):
+                        await asyncio.sleep(1)
+                        if shot.isdone():
+                            return
 
                     if shot.discard():
-                        self.doc.add_next_tick_callback(self.wait)
+                        LOGS .debug("Discarded oneshot wait on %s", rendered)
+                        self.loop.call_later(andwaiting, self.loop.stop)
 
                 asyncio.create_task(_tout())
 

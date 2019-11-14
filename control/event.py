@@ -391,9 +391,13 @@ class Event:
             fcn = self.discard()
             return fcn(*args, **kwa) if callable(fcn) else None
 
+        def isdone(self) -> bool:
+            "remove from handlers"
+            return not len(self.__dict__)
+
         def discard(self) -> Optional[Callable]:
             "remove from handlers"
-            if not len(self.__dict__):
+            if self.isdone():
                 return None
 
             fcn = self._fcn
