@@ -28,13 +28,13 @@
 }
 
 .bbm-dpx-btn[tabvalue='-'] {
-    border: none!important;
-    border-radius: 0px 0px 0px 0px !important;
+    border-radius: 8px 8px 0px 0px !important;
+    border-style: dotted dotted none none;
 }
 
 .bbm-dpx-curbtn[tabvalue='-'] {
-    border-bottom: none!important;
-    border-radius: 5px 5px 0px 0px !important;
+    border-radius: 8px 8px 0px 0px !important;
+    border-style: dotted dotted none none;
 }
 
 .bbm-dpx-btn[disabled] { opacity: .20!important; }
