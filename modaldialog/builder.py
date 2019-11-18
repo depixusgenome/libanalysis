@@ -292,6 +292,18 @@ class BodyParser:
                 if len(i) == 0 or i == ['']:
                     continue
 
+                if len(i) == 1:
+                    cur = i[0].strip()
+                    if cur[:2] == "* " and cur[-1] == '*':
+                        txt.append(f'<tr><td colspan="{maxv}"><i>{cur[2:-1]}</i></td></tr>')
+                        continue
+                    if cur[:3] == "** " and cur[-2:] == '**':
+                        txt.append(f'<tr><td colspan="{maxv}"><b>{cur[3:-2]}</b></td></tr>')
+                        continue
+                    if cur[:4] == "**_ " and cur[-3] == '_**':
+                        txt.append(f'<tr><td colspan="{maxv}"><b><i>{cur[4:-3]}</i></b></td></tr>')
+                        continue
+
                 styles = [
                     (
                         j if not k else k.group(1),
