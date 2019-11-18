@@ -17,6 +17,21 @@ def pytest_addoption(parser):
         help    = "store new test data"
     )
 
+def pytest_collection_modifyitems(items, config):
+    "change pytest collection"
+    dostore = config.getoption("--save-patterns", False)
+    if dostore:
+        selected_items = []
+        deselected_items = []
+
+        for item in items:
+            if 'record' in getattr(item, 'fixturenames', ()):
+                selected_items.append(item)
+            else:
+                deselected_items.append(item)
+        config.hook.pytest_deselected(items=deselected_items)
+        items[:] = selected_items
+
 def _record(request):
     try:
         from tests.testingcore import utpath
