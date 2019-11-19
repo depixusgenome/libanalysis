@@ -159,6 +159,7 @@ def test_splits():
     assert splitoligos("3mer", path = "/a/b/aca_bbb_ccc_3nM_aaa2pM") == ["aaa", "ccc"]
     assert splitoligos("4mer", path = "/a/b/aca_bbb_ccc_3nM_aaa2pM") == []
     assert splitoligos("3mer", path = ["/a/b/aca_bbb_ccc_3nM_aaa2pM"]) == ["aaa", "ccc"]
+    assert splitoligos('kmer', path  = 'Test_037_CAG_2-5nM_OR3_150nM') == ["cag"]
     assert splitoligos(
         "4mer",
         path = "test035_5HPs_mix_CTGT--4xAc_5nM_25C_10sec.trk"

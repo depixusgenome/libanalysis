@@ -318,7 +318,7 @@ class OligoPathParser:
     _MER:  ClassVar[str]      = (
         r'(?:[-_]|^)(?P<ol>[atgc]+)(?:[-_]*\dxac)*[_-]*'
         r'(?:2amino(?:[_-]*datp)*|[dlbr]na)*[_-]*'
-        r'(?P<id>\d+(?:[.dp]\d+)*)(?P<unit>[np]M)(?:[_-]|$)'
+        r'(?P<id>\d+(?:[-.dp]\d+)*)(?P<unit>[np]M)(?:[_-]|$)'
     )
     _KMER: ClassVar[Pattern] = re.compile(_MER, re.IGNORECASE)
     _3MER: ClassVar[Pattern] = re.compile(
