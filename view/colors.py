@@ -44,3 +44,15 @@ def tohex(clr:Union[Dict[Any,str], List[str], Tuple[str], Set[str], str, None]):
         getattr(_bkclr, clr).to_hex()   if hasattr(_bkclr, clr)       else
         getattr(_palette, clr)
     )
+
+def palette(name: str, values) -> Dict[Any, str]:
+    "return the best possible palette"
+    if hasattr(_palette, name.lower()):
+        return dict(zip(values, getattr(_palette, name.lower())(len(values))))
+
+    vals = getattr(_palette, name, 'Blues')
+    if isinstance(vals, dict):
+        vals = max(vals.values(), key = len)
+
+    # pylint: disable=no-member
+    return dict(zip(values, _palette.linear_palette(vals, len(values))))
