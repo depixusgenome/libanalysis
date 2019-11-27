@@ -10,11 +10,12 @@ class PlotError:
     "Adds titles to a plot for displaying errors"
     _fig: Figure
     _pos: str
-    def __init__(self, fig, cnt, position = "above"):
+
+    def __init__(self, fig, cnt = 5, position = "above", exceptions = Exception):
         "adds the titles"
         self._fig        = fig
         self._pos        = getattr(cnt, 'titleposition', position)
-        self._exceptions = Exception
+        self._exceptions = exceptions
         for _ in range(getattr(cnt, 'ntitles', cnt)):
             self._fig.add_layout(Title(), self._pos)
 
@@ -22,7 +23,7 @@ class PlotError:
         tmp = None
         try:
             tmp = creator()
-        except Exception as exc: # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except
             self.reset(cache, exc)
             raise
         else:
@@ -34,7 +35,11 @@ class PlotError:
         "sets titles"
         titles  = [i for i in self._fig.above if isinstance(i, Title)]
         if label:
-            if isinstance(label, self._exceptions):
+            if (
+                    isinstance(label, self._exceptions)
+                    and len(label.args)
+                    and hasattr(label.args[0], 'getmessage')
+            ):
                 label = label.args[0].getmessage(percentage = True)
             else:
                 label = str(label)
