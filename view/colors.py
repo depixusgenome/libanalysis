@@ -6,6 +6,7 @@ from typing         import (
 )
 from bokeh.colors   import named    as _bkclr
 from bokeh          import palettes as _palette
+import numpy as np
 
 
 _bkclr.dpxblue = _bkclr.NamedColor("dpxblue", *(int('#6baed6'[i:i+2], 16) for i in (1, 3, 5)))
@@ -52,7 +53,14 @@ def palette(name: str, values) -> Dict[Any, str]:
 
     vals = getattr(_palette, name, 'Blues')
     if isinstance(vals, dict):
-        vals = max(vals.values(), key = len)
+        vals = next((j for i, j in vals.items() if len(values) <= i), vals[max(vals)])
 
-    # pylint: disable=no-member
-    return dict(zip(values, _palette.linear_palette(vals, len(values))))
+    if len(values) == len(vals):
+        return dict(zip(values, vals))
+    if len(values) < len(vals):
+        # pylint: disable=no-member
+        return dict(zip(values, _palette.linear_palette(vals, len(values))))
+    return dict(zip(
+        values,
+        [vals[i] for i in np.linspace(0, len(vals)-1, len(values), dtype = 'i8')]
+    ))
