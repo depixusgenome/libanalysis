@@ -48,7 +48,7 @@ def tohex(clr:Union[Dict[Any,str], List[str], Tuple[str], Set[str], str, None]):
 
 def palette(name: str, values) -> Dict[Any, str]:
     "return the best possible palette"
-    if hasattr(_palette, name.lower()):
+    if callable(getattr(_palette, name.lower(), None)):
         return dict(zip(values, getattr(_palette, name.lower())(len(values))))
 
     vals = getattr(_palette, name, 'Blues')
